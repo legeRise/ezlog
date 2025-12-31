@@ -1,0 +1,6 @@
+fastapi       # Web framework for serving logs over WebSockets
+uvicorn       # ASGI server for FastAPI
+websockets    # WebSocket library for uvicorn
+typer         # CLI commands and argument parsing
+jinja2        # Templating engine for HTML rendering
+aiosfiles     # Asynchronous file operations

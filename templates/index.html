@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EZViewer Pro</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: { 900: '#1e1e1e', 800: '#252526', 700: '#333333', 
+                                600: '#3e3e42', 500: '#505050' },
+                        blue: { 500: '#007acc' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar to match VS Code dark theme */
+        ::-webkit-scrollbar { width: 12px; height: 12px; }
+        ::-webkit-scrollbar-track { background: #1e1e1e; }
+        ::-webkit-scrollbar-thumb { background: #424242; border-radius: 6px; border: 3px solid #1e1e1e; }
+        ::-webkit-scrollbar-thumb:hover { background: #5a5a5a; }
+        .log-font { font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-300 h-screen flex overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="w-64 bg-gray-800 border-r border-gray-600 flex flex-col flex-shrink-0 transition-all duration-300" id="sidebar">
+        <div class="p-4 border-b border-gray-600 font-bold tracking-wider text-white flex justify-between items-center">
+            <span>EZVIEWER</span>
+            <span class="text-xs font-normal text-gray-500">v2.0</span>
+        </div>
+        
+        <!-- Project Search -->
+        <div class="p-2 border-b border-gray-600">
+            <input type="text" id="projectSearch" placeholder="Filter projects..." 
+                class="w-full bg-gray-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-500">
+        </div>
+
+        <!-- Project List -->
+        <div id="projectList" class="flex-1 overflow-y-auto">
+            <!-- Buttons injected by JS -->
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 flex flex-col min-w-0">
+        
+        <!-- TOP TOOLBAR -->
+        <header class="h-14 bg-gray-800 border-b border-gray-600 flex items-center justify-between px-4 shadow-sm z-10">
+            <div class="flex items-center space-x-4 overflow-hidden">
+                <button id="toggleSidebar" class="text-gray-400 hover:text-white lg:hidden">☰</button>
+                <h2 id="currentLogTitle" class="font-semibold text-white truncate">Select a project</h2>
+                <span id="connectionStatus" class="px-2 py-0.5 rounded text-xs font-bold uppercase hidden"></span>
+            </div>
+
+            <div class="flex items-center space-x-3">
+                <!-- Content Search -->
+                <div class="relative group">
+                    <input type="text" id="logFilter" placeholder="Filter log content..." 
+                        class="bg-gray-900 border border-gray-600 text-sm rounded-md px-3 py-1.5 w-48 focus:w-64 transition-all focus:outline-none focus:border-blue-500">
+                    <span id="matchCount" class="absolute right-2 top-2 text-xs text-gray-500 hidden">0 matches</span>
+                </div>
+
+                <!-- Pause Button -->
+                <button id="pauseBtn" class="flex items-center space-x-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors border border-gray-600">
+                    <span id="pauseIcon">⏸</span>
+                    <span>Pause</span>
+                    <span id="pendingCount" class="ml-1 bg-blue-500 text-white text-[10px] px-1.5 rounded-full hidden">0</span>
+                </button>
+                
+                <button id="clearBtn" class="text-gray-400 hover:text-red-400 text-sm" title="Clear View">🚫</button>
+            </div>
+        </header>
+
+        <!-- LOG VIEWER AREA -->
+        <div id="logContainer" class="flex-1 overflow-y-auto p-4 log-font leading-relaxed whitespace-pre-wrap break-all relative">
+            <div id="welcomeMsg" class="h-full flex flex-col items-center justify-center text-gray-500">
+                <p class="text-lg">Select a log file from the sidebar to start.</p>
+                <p class="text-sm mt-2 opacity-70">Use the search bar to filter projects.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Inject Aliases and Script -->
+    <script>const ALIASES = {{ aliases_json|safe }};</script>
+    <script src="/static/app.js"></script>
+</body>
+</html>
