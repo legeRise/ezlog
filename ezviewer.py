@@ -84,3 +84,7 @@ async def websocket_endpoint(ws: WebSocket, alias: str):
 
     except WebSocketDisconnect:
         print(f"Client disconnected: {alias}")
+
+def start(port: int = 9200):
+    import uvicorn
+    uvicorn.run("ezviewer:app", host="0.0.0.0", port=port, reload=True)
