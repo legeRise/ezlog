@@ -2,7 +2,8 @@
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Updated viewport for better mobile scaling -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>EZViewer Pro</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -21,21 +22,35 @@
         }
     </script>
     <style>
-        /* Custom scrollbar to match VS Code dark theme */
-        ::-webkit-scrollbar { width: 12px; height: 12px; }
-        ::-webkit-scrollbar-track { background: #1e1e1e; }
-        ::-webkit-scrollbar-thumb { background: #424242; border-radius: 6px; border: 3px solid #1e1e1e; }
-        ::-webkit-scrollbar-thumb:hover { background: #5a5a5a; }
+        /* Mobile: Hide scrollbars for cleaner look */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Desktop: Custom scrollbar */
+        @media (min-width: 768px) {
+            ::-webkit-scrollbar { width: 12px; height: 12px; }
+            ::-webkit-scrollbar-track { background: #1e1e1e; }
+            ::-webkit-scrollbar-thumb { background: #424242; border-radius: 6px; border: 3px solid #1e1e1e; }
+            ::-webkit-scrollbar-thumb:hover { background: #5a5a5a; }
+        }
         .log-font { font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-300 h-screen flex overflow-hidden">
+<!-- h-[100dvh] fixes scroll issues on mobile browsers with address bars -->
+<body class="bg-gray-900 text-gray-300 h-[100dvh] flex overflow-hidden relative">
+
+    <!-- MOBILE OVERLAY (Hidden on Desktop) -->
+    <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-40 hidden md:hidden backdrop-blur-sm transition-opacity"></div>
 
     <!-- SIDEBAR -->
-    <aside class="w-64 bg-gray-800 border-r border-gray-600 flex flex-col flex-shrink-0 transition-all duration-300" id="sidebar">
+    <!-- Mobile: Fixed, Off-screen (-translate-x-full), Slide-in transition -->
+    <!-- Desktop: Relative, Always visible (translate-x-0) -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 w-72 bg-gray-800 border-r border-gray-600 transform -translate-x-full transition-transform duration-300 ease-in-out z-50 md:relative md:translate-x-0 flex flex-col shadow-2xl md:shadow-none">
         <div class="p-4 border-b border-gray-600 font-bold tracking-wider text-white flex justify-between items-center">
             <span>EZVIEWER</span>
             <span class="text-xs font-normal text-gray-500">v2.0</span>
+            <!-- Close button for mobile -->
+            <button id="closeSidebar" class="md:hidden text-gray-400 hover:text-white">✕</button>
         </div>
         
         <!-- Project Search -->
@@ -51,40 +66,41 @@
     </aside>
 
     <!-- MAIN CONTENT -->
-    <main class="flex-1 flex flex-col min-w-0">
+    <main class="flex-1 flex flex-col min-w-0 h-full">
         
         <!-- TOP TOOLBAR -->
-        <header class="h-14 bg-gray-800 border-b border-gray-600 flex items-center justify-between px-4 shadow-sm z-10">
-            <div class="flex items-center space-x-4 overflow-hidden">
-                <button id="toggleSidebar" class="text-gray-400 hover:text-white lg:hidden">☰</button>
-                <h2 id="currentLogTitle" class="font-semibold text-white truncate">Select a project</h2>
+        <header class="h-14 bg-gray-800 border-b border-gray-600 flex items-center justify-between px-4 shadow-sm z-30 shrink-0">
+            <div class="flex items-center space-x-3 overflow-hidden">
+                <button id="toggleSidebar" class="text-gray-400 hover:text-white md:hidden p-1 border border-gray-600 rounded">
+                    ☰
+                </button>
+                <h2 id="currentLogTitle" class="font-semibold text-white truncate text-sm md:text-base">Select a project</h2>
                 <span id="connectionStatus" class="px-2 py-0.5 rounded text-xs font-bold uppercase hidden"></span>
             </div>
 
-            <div class="flex items-center space-x-3">
-                <!-- Content Search -->
+            <div class="flex items-center space-x-2">
+                <!-- Content Search (Hidden on very small screens if needed, or condensed) -->
                 <div class="relative group">
-                    <input type="text" id="logFilter" placeholder="Filter log content..." 
-                        class="bg-gray-900 border border-gray-600 text-sm rounded-md px-3 py-1.5 w-48 focus:w-64 transition-all focus:outline-none focus:border-blue-500">
-                    <span id="matchCount" class="absolute right-2 top-2 text-xs text-gray-500 hidden">0 matches</span>
+                    <input type="text" id="logFilter" placeholder="Filter..." 
+                        class="bg-gray-900 border border-gray-600 text-sm rounded-md px-2 py-1.5 w-24 focus:w-48 md:w-48 transition-all focus:outline-none focus:border-blue-500">
                 </div>
 
                 <!-- Pause Button -->
                 <button id="pauseBtn" class="flex items-center space-x-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors border border-gray-600">
                     <span id="pauseIcon">⏸</span>
-                    <span>Pause</span>
+                    <span class="hidden md:inline">Pause</span>
                     <span id="pendingCount" class="ml-1 bg-blue-500 text-white text-[10px] px-1.5 rounded-full hidden">0</span>
                 </button>
                 
-                <button id="clearBtn" class="text-gray-400 hover:text-red-400 text-sm" title="Clear View">🚫</button>
+                <button id="clearBtn" class="text-gray-400 hover:text-red-400 text-sm px-2" title="Clear View">🚫</button>
             </div>
         </header>
 
         <!-- LOG VIEWER AREA -->
-        <div id="logContainer" class="flex-1 overflow-y-auto p-4 log-font leading-relaxed whitespace-pre-wrap break-all relative">
-            <div id="welcomeMsg" class="h-full flex flex-col items-center justify-center text-gray-500">
-                <p class="text-lg">Select a log file from the sidebar to start.</p>
-                <p class="text-sm mt-2 opacity-70">Use the search bar to filter projects.</p>
+        <div id="logContainer" class="flex-1 overflow-y-auto p-2 md:p-4 log-font leading-relaxed whitespace-pre-wrap break-all relative">
+            <div id="welcomeMsg" class="h-full flex flex-col items-center justify-center text-gray-500 text-center">
+                <p class="text-lg">Select a log file.</p>
+                <p class="text-sm mt-2 opacity-70">Use the sidebar to start.</p>
             </div>
         </div>
     </main>

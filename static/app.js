@@ -6,12 +6,14 @@ class LogViewer {
         
         // State
         this.isPaused = false;
-        this.pauseBuffer = []; // Stores logs while paused
+        this.pauseBuffer = []; 
         this.filterTerm = "";
         this.isUserScrolling = false;
 
         // DOM Elements
         this.dom = {
+            sidebar: document.getElementById('sidebar'),
+            overlay: document.getElementById('sidebarOverlay'),
             projectList: document.getElementById('projectList'),
             logContainer: document.getElementById('logContainer'),
             title: document.getElementById('currentLogTitle'),
@@ -31,9 +33,20 @@ class LogViewer {
         // Event Listeners
         document.getElementById('projectSearch').addEventListener('input', (e) => this.renderSidebar(e.target.value));
         
-        document.getElementById('toggleSidebar').addEventListener('click', () => {
-            document.getElementById('sidebar').classList.toggle('-ml-64');
-        });
+        // Mobile Sidebar Logic
+        const toggleMenu = (show) => {
+            if (show) {
+                this.dom.sidebar.classList.remove('-translate-x-full');
+                this.dom.overlay.classList.remove('hidden');
+            } else {
+                this.dom.sidebar.classList.add('-translate-x-full');
+                this.dom.overlay.classList.add('hidden');
+            }
+        };
+
+        document.getElementById('toggleSidebar').addEventListener('click', () => toggleMenu(true));
+        document.getElementById('closeSidebar').addEventListener('click', () => toggleMenu(false));
+        this.dom.overlay.addEventListener('click', () => toggleMenu(false));
 
         this.dom.pauseBtn.addEventListener('click', () => this.togglePause());
         
@@ -58,14 +71,21 @@ class LogViewer {
         Object.keys(this.aliases).sort().forEach(alias => {
             if (alias.toLowerCase().includes(lowerFilter)) {
                 const btn = document.createElement('button');
-                btn.className = `w-full text-left px-4 py-2 text-sm text-gray-400 hover:bg-gray-700 hover:text-white border-l-2 border-transparent transition-colors truncate`;
+                btn.className = `w-full text-left px-4 py-3 text-sm text-gray-400 hover:bg-gray-700 hover:text-white border-l-2 border-transparent transition-colors truncate`;
                 btn.textContent = alias;
                 
                 if (alias === this.currentAlias) {
                     btn.classList.add('bg-gray-700', 'text-white', 'border-blue-500');
                 }
 
-                btn.onclick = () => this.connect(alias, btn);
+                btn.onclick = () => {
+                    this.connect(alias, btn);
+                    // Mobile: Close sidebar after selection for better UX
+                    if (window.innerWidth < 768) {
+                        this.dom.sidebar.classList.add('-translate-x-full');
+                        this.dom.overlay.classList.add('hidden');
+                    }
+                };
                 this.dom.projectList.appendChild(btn);
             }
         });
@@ -76,7 +96,7 @@ class LogViewer {
         
         // Reset View
         this.currentAlias = alias;
-        this.renderSidebar(document.getElementById('projectSearch').value); // Re-render to highlight active
+        this.renderSidebar(document.getElementById('projectSearch').value); 
         this.dom.title.textContent = alias;
         this.dom.welcome.style.display = 'none';
         this.dom.logContainer.innerHTML = '';
@@ -103,7 +123,6 @@ class LogViewer {
                 else this.appendLog(msg.msg, 'text-gray-500 italic');
             } 
             else if (msg.type === 'log_batch') {
-                // Bulk append for history
                 this.appendBatch(msg.data);
             }
             else if (msg.type === 'log') {
@@ -133,17 +152,17 @@ class LogViewer {
 
     appendLog(text, extraClass = '') {
         const el = this.createLogElement(text, extraClass);
-        if (!el) return; // Filtered out
+        if (!el) return;
         this.dom.logContainer.appendChild(el);
         this.scrollToBottom();
     }
 
     createLogElement(text, extraClass = '') {
-        // Content Filtering Check
+        // Content Filtering
         const isHidden = this.filterTerm && !text.toLowerCase().includes(this.filterTerm);
         
         const div = document.createElement('div');
-        div.className = `py-0.5 px-2 hover:bg-gray-800 ${extraClass} ${isHidden ? 'hidden' : ''}`;
+        div.className = `py-0.5 px-2 hover:bg-gray-800 border-b border-transparent hover:border-gray-700 ${extraClass} ${isHidden ? 'hidden' : ''}`;
         
         // Syntax Highlighting
         if (text.includes('ERROR') || text.includes('CRITICAL')) div.classList.add('text-red-400');
@@ -163,8 +182,6 @@ class LogViewer {
         this.scrollToBottom();
     }
 
-    // --- Features ---
-
     togglePause() {
         this.isPaused = !this.isPaused;
         const btn = this.dom.pauseBtn;
@@ -175,7 +192,6 @@ class LogViewer {
             btn.querySelector('span').textContent = "Resume";
             document.getElementById('pauseIcon').textContent = "▶";
         } else {
-            // Unpause: Flush buffer
             if (this.pauseBuffer.length > 0) {
                 this.appendBatch(this.pauseBuffer);
                 this.pauseBuffer = [];
@@ -201,10 +217,8 @@ class LogViewer {
     applyFilter(term) {
         this.filterTerm = term.toLowerCase();
         const logs = this.dom.logContainer.children;
-        
-        // Loop through existing DOM nodes (might be slow if 10k+ lines, but usable)
         for (let div of logs) {
-            if (div.classList.contains('py-0.5')) { // Ensure it's a log line
+            if (div.classList.contains('py-0.5')) {
                 const text = div.textContent.toLowerCase();
                 const shouldHide = this.filterTerm && !text.includes(this.filterTerm);
                 div.classList.toggle('hidden', shouldHide);
@@ -223,10 +237,10 @@ class LogViewer {
         el.textContent = msg;
         el.className = `px-2 py-0.5 rounded text-[10px] font-bold uppercase text-white ${colorClass}`;
         el.style.display = 'block';
+        setTimeout(() => { el.style.display = 'none'; }, 3000); // Hide after 3s
     }
 }
 
-// Start
 window.addEventListener('DOMContentLoaded', () => {
     window.app = new LogViewer(ALIASES);
 });
