@@ -52,11 +52,11 @@ def list():
 
 
 @cli.command()
-def run(port: int = 9200):
+def run(port: int = 9200, host: str = "0.0.0.0"):
     """Start the ezviewer server"""
-    typer.echo(f"Starting ezviewer on http://localhost:{port}")
+    typer.echo(f"Starting ezviewer on http://{host}:{port}")
     from ezviewer import start
-    start(port)
+    start(port, host)
 
 
 @cli.command("show-path")

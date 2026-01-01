@@ -1,10 +1,23 @@
 import os
+import sys
 import asyncio
+from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 import json
+
+
+def get_resource_path(relative_path):
+    """Get absolute path to resource - works for dev and PyInstaller"""
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable
+        base_path = Path(sys._MEIPASS)
+    else:
+        # Running in normal Python
+        base_path = Path(__file__).parent
+    return str(base_path / relative_path)
 
 # --- Load your logs logic ---
 try:
@@ -17,8 +30,8 @@ except ImportError:
 app = FastAPI()
 
 # Mount static files (JS, CSS, Images)
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory=get_resource_path("static")), name="static")
+templates = Jinja2Templates(directory=get_resource_path("templates"))
 
 @app.get("/", response_class=HTMLResponse)
 async def get_home(request: Request):
@@ -85,6 +98,6 @@ async def websocket_endpoint(ws: WebSocket, alias: str):
     except WebSocketDisconnect:
         print(f"Client disconnected: {alias}")
 
-def start(port: int = 9200):
+def start(port: int = 9200, host: str = "0.0.0.0"):
     import uvicorn
-    uvicorn.run("ezviewer:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("ezviewer:app", host=host, port=port, reload=False)
