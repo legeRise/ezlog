@@ -1,66 +1,57 @@
-# EZViewer - Modern Log Viewer for Linux Servers
+# EZViewer - Simple Log Viewer for Linux Servers
 
-A standalone, web-based log viewer with real-time streaming - your modern frontail replacement without Node.js dependency.
+A standalone, web-based log viewer with real-time streaming.
 
 ## Features
 
-- 📊 **Real-time log streaming** via WebSockets
-- 📁 **Track multiple logs** with simple aliases
-- 🌐 **Web interface** for easy viewing
-- 🚀 **Standalone binary** - no Python installation needed
-- ⚡ **Fast and lightweight** - ~25MB total size
-- 🔧 **Simple CLI** for log management
+- 📊 Real-time log streaming via WebSockets
+- 📁 Track multiple logs with simple aliases
+- 🌐 Web interface for easy viewing
+- 🚀 Standalone binary - no Python installation needed
+- ⚡ Fast and lightweight - ~15MB total size
+- 🔧 Simple CLI for log management
 
 ---
 
 ## 🚀 Quick Start (For Users)
 
-**Just want to use ezviewer? Download and run!**
-
-1. **Download the latest binary:**
-   - Get `ezviewer-linux-x64.tar.gz` from [Releases](https://github.com/yourusername/ezviewer/releases)
-   - Or download directly from your distribution server
-
-2. **Extract and install:**
+1. Download the latest binary from releases
+2. Extract and install:
    ```bash
    tar -xzf ezviewer-linux-x64.tar.gz
-   cd ezviewer
+   cd ezviewer-linux-x64
    sudo ./install.sh
    ```
 
-3. **Start using it:**
+3. Use it:
    ```bash
    ezviewer add myapp /var/log/myapp.log
    ezviewer run
    # Open browser: http://localhost:9200
    ```
 
-**That's it! No Python, no dependencies, just works.**
-
 ---
 
 ## 🛠️ Build from Source (For Developers)
 
-**Want to build the binary yourself?**
-
-1. **Clone the repository:**
+1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/ezviewer.git
+   git clone https://github.com/legerise/ezviewer.git
    cd ezviewer
    ```
 
-2. **Build the binary:**
+2. Build the binary:
    ```bash
    chmod +x build.sh
    ./build.sh
    ```
-   
    This creates `dist/ezviewer/` with the standalone binary.
 
-3. **Install system-wide:**
+3. Install system-wide:
    ```bash
    sudo ./install.sh
    ```
+   This installs the binary to `/usr/local/ezviewer/` and creates a symlink at `/usr/local/bin/ezviewer`.
 
 ---
 
