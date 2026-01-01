@@ -12,9 +12,16 @@ BIN_LINK="/usr/local/bin/ezviewer"
 
 echo "📦 Installing ezviewer..."
 
-# Check if binary exists
-if [ ! -f "dist/ezviewer/ezviewer" ]; then
-    echo "❌ Binary not found! Run ./build.sh first."
+# Check if binary exists (handle both packaged and source directory)
+if [ -f "ezviewer" ]; then
+    # Running from extracted package (binary is here)
+    SOURCE_DIR="."
+elif [ -f "dist/ezviewer/ezviewer" ]; then
+    # Running from source directory (binary is in dist/)
+    SOURCE_DIR="dist/ezviewer"
+else
+    echo "❌ Binary not found!"
+    echo "If building from source, run ./build.sh first."
     exit 1
 fi
 
@@ -31,7 +38,7 @@ fi
 # Copy binary to installation directory
 echo "📁 Copying files to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
-cp -r dist/ezviewer/* "$INSTALL_DIR/"
+cp -r "$SOURCE_DIR"/* "$INSTALL_DIR/"
 
 # Make executable
 chmod +x "$INSTALL_DIR/ezviewer"

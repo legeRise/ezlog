@@ -15,20 +15,59 @@ A standalone, web-based log viewer with real-time streaming.
 
 ## 🚀 Quick Start (For Users)
 
-1. Download the latest binary from releases
-2. Extract and install:
-   ```bash
-   tar -xzf ezviewer-linux-x64.tar.gz
-   cd ezviewer-linux-x64
-   sudo ./install.sh
-   ```
+### Step 1: Download the latest version
 
-3. Use it:
-   ```bash
-   ezviewer add myapp /var/log/myapp.log
-   ezviewer run
-   # Open browser: http://localhost:9200
-   ```
+Visit the releases page: https://github.com/legeRise/ezviewer/releases
+
+Click on the latest `ezviewer-linux-x64-v*.tar.gz` file to download it.
+
+Or use command line:
+```bash
+cd ~/Downloads
+wget https://github.com/legeRise/ezviewer/releases/download/v1.0.0/ezviewer-linux-x64-v1.0.0.tar.gz
+```
+
+### Step 2: Extract the archive
+
+```bash
+tar -xzf ezviewer-linux-x64-v1.0.0.tar.gz
+cd ezviewer-linux-x64
+```
+
+### Step 3: Install system-wide
+
+```bash
+sudo ./install.sh
+```
+
+This will install ezviewer to `/usr/local/ezviewer/` and make it available system-wide.
+
+### Step 4: Verify installation
+
+Open a new terminal and run:
+```bash
+ezviewer --help
+```
+
+If you see the help message, installation was successful.
+
+### Step 5: Clean up
+
+Now that ezviewer is installed system-wide, you can delete the download folder:
+```bash
+cd ~/Downloads
+rm -rf ezviewer-linux-x64
+rm ezviewer-linux-x64-v1.0.0.tar.gz
+```
+
+### Step 6: Use ezviewer
+
+```bash
+ezviewer add myapp /var/log/myapp.log
+ezviewer list
+ezviewer run
+# Open browser: http://localhost:9200
+```
 
 ---
 
@@ -57,33 +96,102 @@ A standalone, web-based log viewer with real-time streaming.
 
 ## 📖 Usage
 
-### Track log files
+### Example Scenario: Managing Multiple Project Logs
+
+Let's say you're a developer working on a server with 5 different projects, each with their own log files in different locations:
+
+```
+/var/log/nginx/access.log
+/home/user/myapp/logs/app.log
+/opt/api-server/logs/api.log
+/var/www/website/errors.log
+/home/user/scripts/cron.log
+```
+
+Instead of remembering these long paths and using `tail -f` for each one, ezviewer lets you organize them.
+
+### Step 1: Add logs with aliases
+
+An **alias** is a short nickname you give to a log file. Instead of typing the full path, you use the alias.
 
 ```bash
-# Add a log file
-ezviewer add myapp /var/log/myapp.log
+# Syntax: ezviewer add <alias> <full-path-to-log-file>
 
-# List tracked logs
+ezviewer add nginx /var/log/nginx/access.log
+ezviewer add myapp /home/user/myapp/logs/app.log
+ezviewer add api /opt/api-server/logs/api.log
+ezviewer add website /var/www/website/errors.log
+ezviewer add cron /home/user/scripts/cron.log
+```
+
+After each command, you'll see:
+```
+Added nginx -> /var/log/nginx/access.log
+```
+
+### Step 2: Verify logs are tracked
+
+Check all tracked logs:
+```bash
 ezviewer list
-
-# Remove a tracked log
-ezviewer remove myapp
-
-# Update log path
-ezviewer update myapp /var/log/newpath.log
 ```
 
-### Start the web server
+Output:
+```
+nginx           /var/log/nginx/access.log
+myapp           /home/user/myapp/logs/app.log
+api             /opt/api-server/logs/api.log
+website         /var/www/website/errors.log
+cron            /home/user/scripts/cron.log
+```
+
+Now you can see all your logs and their aliases at a glance.
+
+### Step 3: Start the web viewer
 
 ```bash
-# Start on default port (9200)
 ezviewer run
-
-# Custom port and host
-ezviewer run --port 8000 --host 127.0.0.1
 ```
 
-Then open your browser to `http://localhost:9200`
+Output:
+```
+Starting ezviewer on http://0.0.0.0:9200
+```
+
+### Step 4: View logs in your browser
+
+Open your browser and go to: `http://localhost:9200`
+
+You'll see a web interface with all your tracked logs listed. Click any alias (nginx, myapp, api, etc.) to view that log in real-time.
+
+### Managing Your Logs
+
+**Update a log path:**
+```bash
+# If your log file moves to a new location
+ezviewer update myapp /home/user/newpath/app.log
+```
+
+**Remove a log:**
+```bash
+# Stop tracking a log file
+ezviewer remove cron
+```
+
+**Custom port and host:**
+```bash
+# Run on a different port
+ezviewer run --port 8000
+
+# Run on localhost only (more secure)
+ezviewer run --port 9200 --host 127.0.0.1
+```
+
+### Where is tracking data stored?
+
+All your tracked logs are saved in: `~/.ezviewer/tracked_logs.json`
+
+This means each user on the system can track their own logs independently.
 
 ## Requirements
 
