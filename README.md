@@ -17,9 +17,7 @@ A standalone, web-based log viewer with real-time streaming.
 
 ### Step 1: Download the latest version
 
-Visit the releases page: https://github.com/legeRise/ezlog/releases
-
-Click on the latest `ezlog-linux-x64-v*.tar.gz` file to download it.
+Visit the releases page: [https://github.com/legeRise/ezlog/releases](https://github.com/legeRise/ezlog/releases/latest/download/ezlog-linux-x64.tar.gz)
 
 Or use command line:
 ```bash
