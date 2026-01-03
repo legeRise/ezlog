@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 # Always use hidden folder in user's home
-APP_DIR = Path.home() / ".ezviewer"
+APP_DIR = Path.home() / ".ezlog"
 TRACKED_LOGS_FILE = APP_DIR / "tracked_logs.json"
 
 

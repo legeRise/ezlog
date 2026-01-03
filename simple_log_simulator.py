@@ -5,7 +5,7 @@ import random
 from datetime import datetime
 
 # Path to tracked_logs.json (same as in tracked_logs.py)
-APP_DIR = Path.home() / ".ezviewer"
+APP_DIR = Path.home() / ".ezlog"
 TRACKED_LOGS_FILE = APP_DIR / "tracked_logs.json"
 
 def load_tracked_logs():

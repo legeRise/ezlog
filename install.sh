@@ -7,18 +7,18 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-INSTALL_DIR="/usr/local/ezviewer"
-BIN_LINK="/usr/local/bin/ezviewer"
+INSTALL_DIR="/usr/local/ezlog"
+BIN_LINK="/usr/local/bin/ezlog"
 
-echo "📦 Installing ezviewer..."
+echo "📦 Installing ezlog..."
 
 # Check if binary exists (handle both packaged and source directory)
-if [ -f "ezviewer" ]; then
+if [ -f "ezlog" ]; then
     # Running from extracted package (binary is here)
     SOURCE_DIR="."
-elif [ -f "dist/ezviewer/ezviewer" ]; then
+elif [ -f "dist/ezlog/ezlog" ]; then
     # Running from source directory (binary is in dist/)
-    SOURCE_DIR="dist/ezviewer"
+    SOURCE_DIR="dist/ezlog"
 else
     echo "❌ Binary not found!"
     echo "If building from source, run ./build.sh first."
@@ -41,23 +41,23 @@ mkdir -p "$INSTALL_DIR"
 cp -r "$SOURCE_DIR"/* "$INSTALL_DIR/"
 
 # Make executable
-chmod +x "$INSTALL_DIR/ezviewer"
+chmod +x "$INSTALL_DIR/ezlog"
 
 # Create symlink
 echo "🔗 Creating symlink in /usr/local/bin..."
-ln -s "$INSTALL_DIR/ezviewer" "$BIN_LINK"
+ln -s "$INSTALL_DIR/ezlog" "$BIN_LINK"
 
 echo "✅ Installation complete!"
 echo ""
-echo "🎉 ezviewer is now installed system-wide!"
+echo "🎉 ezlog is now installed system-wide!"
 echo ""
 echo "Usage:"
-echo "  ezviewer add <alias> <path>    # Track a log file"
-echo "  ezviewer list                  # List tracked logs"
-echo "  ezviewer remove <alias>        # Remove tracked log"
-echo "  ezviewer run --port 9200       # Start web server"
+echo "  ezlog add <alias> <path>    # Track a log file"
+echo "  ezlog list                  # List tracked logs"
+echo "  ezlog remove <alias>        # Remove tracked log"
+echo "  ezlog run --port 9200       # Start web server"
 echo ""
 echo "Example:"
-echo "  ezviewer add myapp /var/log/myapp.log"
-echo "  ezviewer run"
+echo "  ezlog add myapp /var/log/myapp.log"
+echo "  ezlog run"
 echo "  # Open browser: http://localhost:9200"

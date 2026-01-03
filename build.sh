@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🔨 Building EZViewer with PyInstaller..."
+echo "🔨 Building ezlog with PyInstaller..."
 
 # Check if PyInstaller is installed
 if ! command -v pyinstaller &> /dev/null; then
@@ -21,19 +21,19 @@ rm -rf build dist
 
 # Build with PyInstaller
 echo "🚀 Building standalone binary..."
-pyinstaller ezviewer.spec
+pyinstaller ezlog.spec
 
 # Check if build was successful
-if [ -f "dist/ezviewer/ezviewer" ]; then
+if [ -f "dist/ezlog/ezlog" ]; then
     echo "✅ Build successful!"
     echo ""
-    echo "📁 Binary location: dist/ezviewer/ezviewer"
+    echo "📁 Binary location: dist/ezlog/ezlog"
     echo ""
     echo "🧪 Test with:"
-    echo "  ./dist/ezviewer/ezviewer --help"
-    echo "  ./dist/ezviewer/ezviewer add test /tmp/test.log"
-    echo "  ./dist/ezviewer/ezviewer list"
-    echo "  ./dist/ezviewer/ezviewer run --port 8000"
+    echo "  ./dist/ezlog/ezlog --help"
+    echo "  ./dist/ezlog/ezlog add test /tmp/test.log"
+    echo "  ./dist/ezlog/ezlog list"
+    echo "  ./dist/ezlog/ezlog run --port 8000"
     echo ""
     echo "📦 To install system-wide, run: sudo ./install.sh"
 else

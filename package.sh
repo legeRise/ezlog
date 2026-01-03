@@ -1,14 +1,14 @@
 #!/bin/bash
 set -e
 
-echo "📦 Packaging ezviewer for distribution..."
+echo "📦 Packaging ezlog for distribution..."
 
 VERSION="1.0.0"
-PACKAGE_NAME="ezviewer-linux-x64"
+PACKAGE_NAME="ezlog-linux-x64"
 ARCHIVE_NAME="${PACKAGE_NAME}-v${VERSION}.tar.gz"
 
 # Check if binary exists
-if [ ! -d "dist/ezviewer" ]; then
+if [ ! -d "dist/ezlog" ]; then
     echo "❌ Binary not found! Run ./build.sh first."
     exit 1
 fi
@@ -19,7 +19,7 @@ rm -rf "$PACKAGE_NAME"
 mkdir -p "$PACKAGE_NAME"
 
 # Copy binary folder and install script
-cp -r dist/ezviewer/* "$PACKAGE_NAME/"
+cp -r dist/ezlog/* "$PACKAGE_NAME/"
 cp install.sh "$PACKAGE_NAME/"
 cp README.md "$PACKAGE_NAME/" 2>/dev/null || true
 
@@ -41,7 +41,7 @@ echo ""
 echo "📤 Distribution options:"
 echo ""
 echo "1. GitHub Releases:"
-echo "   - Go to: https://github.com/yourusername/ezviewer/releases/new"
+echo "   - Go to your repository's Releases page"
 echo "   - Upload: $ARCHIVE_NAME"
 echo "   - Users download and extract"
 echo ""

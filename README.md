@@ -1,4 +1,4 @@
-# EZViewer - Simple Log Viewer for Linux Servers
+# EZLog - Simple Log Viewer for Linux Servers
 
 A standalone, web-based log viewer with real-time streaming.
 
@@ -17,21 +17,21 @@ A standalone, web-based log viewer with real-time streaming.
 
 ### Step 1: Download the latest version
 
-Visit the releases page: https://github.com/legeRise/ezviewer/releases
+Visit the releases page: https://github.com/legeRise/ezlog/releases
 
-Click on the latest `ezviewer-linux-x64-v*.tar.gz` file to download it.
+Click on the latest `ezlog-linux-x64-v*.tar.gz` file to download it.
 
 Or use command line:
 ```bash
 cd ~/Downloads
-wget https://github.com/legeRise/ezviewer/releases/download/v1.0.0/ezviewer-linux-x64-v1.0.0.tar.gz
+wget https://github.com/legeRise/ezlog/releases/download/v1.0.0/ezlog-linux-x64-v1.0.0.tar.gz
 ```
 
 ### Step 2: Extract the archive
 
 ```bash
-tar -xzf ezviewer-linux-x64-v1.0.0.tar.gz
-cd ezviewer-linux-x64
+tar -xzf ezlog-linux-x64-v1.0.0.tar.gz
+cd ezlog-linux-x64
 ```
 
 ### Step 3: Install system-wide
@@ -40,32 +40,32 @@ cd ezviewer-linux-x64
 sudo ./install.sh
 ```
 
-This will install ezviewer to `/usr/local/ezviewer/` and make it available system-wide.
+This will install ezlog to `/usr/local/ezlog/` and make it available system-wide.
 
 ### Step 4: Verify installation
 
 Open a new terminal and run:
 ```bash
-ezviewer --help
+ezlog --help
 ```
 
 If you see the help message, installation was successful.
 
 ### Step 5: Clean up
 
-Now that ezviewer is installed system-wide, you can delete the download folder:
+Now that ezlog is installed system-wide, you can delete the download folder:
 ```bash
 cd ~/Downloads
-rm -rf ezviewer-linux-x64
-rm ezviewer-linux-x64-v1.0.0.tar.gz
+rm -rf ezlog-linux-x64
+rm ezlog-linux-x64-v1.0.0.tar.gz
 ```
 
-### Step 6: Use ezviewer
+### Step 6: Use ezlog
 
 ```bash
-ezviewer add myapp /var/log/myapp.log
-ezviewer list
-ezviewer run
+ezlog add myapp /var/log/myapp.log
+ezlog list
+ezlog start
 # Open browser: http://localhost:9200
 ```
 
@@ -75,8 +75,8 @@ ezviewer run
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/legerise/ezviewer.git
-   cd ezviewer
+   git clone https://github.com/legerise/ezlog.git
+   cd ezlog
    ```
 
 2. Build the binary:
@@ -84,13 +84,13 @@ ezviewer run
    chmod +x build.sh
    ./build.sh
    ```
-   This creates `dist/ezviewer/` with the standalone binary.
+   This creates `dist/ezlog/` with the standalone binary.
 
 3. Install system-wide:
    ```bash
    sudo ./install.sh
    ```
-   This installs the binary to `/usr/local/ezviewer/` and creates a symlink at `/usr/local/bin/ezviewer`.
+   This installs the binary to `/usr/local/ezlog/` and creates a symlink at `/usr/local/bin/ezlog`.
 
 ---
 
@@ -108,20 +108,21 @@ Let's say you're a developer working on a server with 5 different projects, each
 /home/user/scripts/cron.log
 ```
 
-Instead of remembering these long paths and using `tail -f` for each one, ezviewer lets you organize them.
+Instead of remembering these long paths and using `tail -f` for each one, ezlog lets you organize them.
 
 ### Step 1: Add logs with aliases
 
 An **alias** is a short nickname you give to a log file. Instead of typing the full path, you use the alias.
 
 ```bash
-# Syntax: ezviewer add <alias> <full-path-to-log-file>
+# Syntax: ezlog add <alias> <full-path-to-log-file>
 
-ezviewer add nginx /var/log/nginx/access.log
-ezviewer add myapp /home/user/myapp/logs/app.log
-ezviewer add api /opt/api-server/logs/api.log
-ezviewer add website /var/www/website/errors.log
-ezviewer add cron /home/user/scripts/cron.log
+```bash
+ezlog add nginx /var/log/nginx/access.log
+ezlog add myapp /home/user/myapp/logs/app.log
+ezlog add api /opt/api-server/logs/api.log
+ezlog add website /var/www/website/errors.log
+ezlog add cron /home/user/scripts/cron.log
 ```
 
 After each command, you'll see:
@@ -133,7 +134,7 @@ Added nginx -> /var/log/nginx/access.log
 
 Check all tracked logs:
 ```bash
-ezviewer list
+ezlog list
 ```
 
 Output:
@@ -147,15 +148,17 @@ cron            /home/user/scripts/cron.log
 
 Now you can see all your logs and their aliases at a glance.
 
-### Step 3: Start the web viewer
+### Step 3: Start ezlog
 
 ```bash
-ezviewer run
+ezlog start
 ```
 
 Output:
 ```
-Starting ezviewer on http://0.0.0.0:9200
+✅ Started ezlog in background (PID: 12345)
+🌐 Visit http://0.0.0.0:9200
+⏹️  Stop with: ezlog stop
 ```
 
 ### Step 4: View logs in your browser
@@ -169,27 +172,34 @@ You'll see a web interface with all your tracked logs listed. Click any alias (n
 **Update a log path:**
 ```bash
 # If your log file moves to a new location
-ezviewer update myapp /home/user/newpath/app.log
+ezlog update myapp /home/user/newpath/app.log
 ```
 
 **Remove a log:**
 ```bash
 # Stop tracking a log file
-ezviewer remove cron
+ezlog remove cron
 ```
 
 **Custom port and host:**
 ```bash
 # Run on a different port
-ezviewer run --port 8000
+ezlog start --port 8000
 
 # Run on localhost only (more secure)
-ezviewer run --port 9200 --host 127.0.0.1
+ezlog start --port 9200 --host 127.0.0.1
+```
+
+**Process management:**
+```bash
+ezlog status          # Check if running
+ezlog stop            # Stop background process
+ezlog run             # Run in foreground (for debugging)
 ```
 
 ### Where is tracking data stored?
 
-All your tracked logs are saved in: `~/.ezviewer/tracked_logs.json`
+All your tracked logs are saved in: `~/.ezlog/tracked_logs.json`
 
 This means each user on the system can track their own logs independently.
 
@@ -208,9 +218,9 @@ This means each user on the system can track their own logs independently.
 ## Uninstall
 
 ```bash
-sudo rm -rf /usr/local/ezviewer
-sudo rm /usr/local/bin/ezviewer
-rm -rf ~/.ezviewer  # Optional: removes tracked log config
+sudo rm -rf /usr/local/ezlog
+sudo rm /usr/local/bin/ezlog
+rm -rf ~/.ezlog  # Optional: removes tracked log config
 ```
 
 ## Development

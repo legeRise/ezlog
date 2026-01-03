@@ -100,4 +100,4 @@ async def websocket_endpoint(ws: WebSocket, alias: str):
 
 def start(port: int = 9200, host: str = "0.0.0.0"):
     import uvicorn
-    uvicorn.run("ezviewer:app", host=host, port=port, reload=False)
+    uvicorn.run("ezlog:app", host=host, port=port, reload=False)
