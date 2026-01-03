@@ -24,7 +24,7 @@ Click on the latest `ezlog-linux-x64-v*.tar.gz` file to download it.
 Or use command line:
 ```bash
 cd ~/Downloads
-wget https://github.com/legeRise/ezlog/releases/download/v1.0.0/ezlog-linux-x64-v1.0.0.tar.gz
+wget https://github.com/legeRise/ezlog/releases/latest/download/ezlog-linux-x64.tar.gz
 ```
 
 ### Step 2: Extract the archive

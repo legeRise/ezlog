@@ -3,9 +3,8 @@ set -e
 
 echo "📦 Packaging ezlog for distribution..."
 
-VERSION="1.0.0"
 PACKAGE_NAME="ezlog-linux-x64"
-ARCHIVE_NAME="${PACKAGE_NAME}-v${VERSION}.tar.gz"
+ARCHIVE_NAME="${PACKAGE_NAME}.tar.gz"
 
 # Check if binary exists
 if [ ! -d "dist/ezlog" ]; then
