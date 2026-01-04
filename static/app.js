@@ -9,6 +9,15 @@ class LogViewer {
         this.pauseBuffer = []; 
         this.filterTerm = "";
         this.isUserScrolling = false;
+        
+        // Performance: In-memory line buffer (circular buffer with max limit)
+        this.lines = []; // Store all lines in memory
+        this.maxLines = 10000; // Limit to prevent memory bloat
+        this.renderChunkSize = 100; // Render in chunks
+        
+        // Debounce/Throttle timers
+        this.filterDebounce = null;
+        this.scrollThrottle = null;
 
         // DOM Elements
         this.dom = {
@@ -21,13 +30,18 @@ class LogViewer {
             pauseBtn: document.getElementById('pauseBtn'),
             pendingBadge: document.getElementById('pendingCount'),
             filterInput: document.getElementById('logFilter'),
-            welcome: document.getElementById('welcomeMsg')
+            welcome: document.getElementById('welcomeMsg'),
+            themeBtn: document.getElementById('themeBtn'),
+            loading: document.getElementById('loadingIndicator')
         };
 
         this.init();
     }
 
     init() {
+        // Load saved theme
+        this.loadTheme();
+        
         this.renderSidebar("");
         
         // Event Listeners
@@ -49,18 +63,29 @@ class LogViewer {
         this.dom.overlay.addEventListener('click', () => toggleMenu(false));
 
         this.dom.pauseBtn.addEventListener('click', () => this.togglePause());
+        this.dom.themeBtn.addEventListener('click', () => this.cycleTheme());
         
         document.getElementById('clearBtn').addEventListener('click', () => {
             this.dom.logContainer.innerHTML = '';
+            this.lines = []; // Clear memory buffer too
         });
 
-        this.dom.filterInput.addEventListener('input', (e) => this.applyFilter(e.target.value));
+        // Debounced filter (300ms delay)
+        this.dom.filterInput.addEventListener('input', (e) => {
+            clearTimeout(this.filterDebounce);
+            this.filterDebounce = setTimeout(() => this.applyFilter(e.target.value), 300);
+        });
 
-        // Smart Scroll Detection
+        // Throttled scroll detection using RAF
         this.dom.logContainer.addEventListener('scroll', () => {
-            const container = this.dom.logContainer;
-            const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-            this.isUserScrolling = distanceToBottom > 50;
+            if (!this.scrollThrottle) {
+                this.scrollThrottle = requestAnimationFrame(() => {
+                    const container = this.dom.logContainer;
+                    const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+                    this.isUserScrolling = distanceToBottom > 50;
+                    this.scrollThrottle = null;
+                });
+            }
         });
     }
 
@@ -102,6 +127,7 @@ class LogViewer {
         this.dom.logContainer.innerHTML = '';
         this.isUserScrolling = false;
         this.pauseBuffer = [];
+        this.lines = []; // Clear in-memory buffer
         this.updatePendingCount();
 
         if (this.ws) this.ws.close();
@@ -111,9 +137,16 @@ class LogViewer {
         this.ws = new WebSocket(`${proto}://${window.location.host}/ws/${encodeURIComponent(alias)}`);
         
         this.updateStatus('Connecting...', 'bg-yellow-600');
+        this.showLoading(true);
 
-        this.ws.onopen = () => this.updateStatus('Live', 'bg-green-600');
-        this.ws.onclose = () => this.updateStatus('Offline', 'bg-red-600');
+        this.ws.onopen = () => {
+            this.updateStatus('Live', 'bg-green-600');
+            this.showLoading(false);
+        };
+        this.ws.onclose = () => {
+            this.updateStatus('Offline', 'bg-red-600');
+            this.showLoading(false);
+        };
         
         this.ws.onmessage = (e) => {
             const msg = JSON.parse(e.data);
@@ -141,20 +174,39 @@ class LogViewer {
     }
 
     appendBatch(lines) {
-        const frag = document.createDocumentFragment();
-        lines.forEach(text => {
-            const el = this.createLogElement(text);
-            if (el) frag.appendChild(el);
-        });
-        this.dom.logContainer.appendChild(frag);
-        this.scrollToBottom();
+        // Add to in-memory buffer
+        this.lines.push(...lines);
+        
+        // Trim if exceeded max lines (circular buffer)
+        if (this.lines.length > this.maxLines) {
+            const excess = this.lines.length - this.maxLines;
+            this.lines.splice(0, excess);
+        }
+        
+        // Render in chunks to avoid blocking UI
+        this.renderLines(lines);
     }
 
     appendLog(text, extraClass = '') {
+        // Add to in-memory buffer
+        this.lines.push(text);
+        
+        // Trim if exceeded max lines
+        if (this.lines.length > this.maxLines) {
+            this.lines.shift();
+            // Remove oldest DOM element if needed
+            const firstChild = this.dom.logContainer.firstElementChild;
+            if (firstChild && firstChild.classList.contains('py-0.5')) {
+                firstChild.remove();
+            }
+        }
+        
+        // Render single line to DOM
         const el = this.createLogElement(text, extraClass);
-        if (!el) return;
-        this.dom.logContainer.appendChild(el);
-        this.scrollToBottom();
+        if (el) {
+            this.dom.logContainer.appendChild(el);
+            this.scrollToBottom();
+        }
     }
 
     createLogElement(text, extraClass = '') {
@@ -216,19 +268,61 @@ class LogViewer {
 
     applyFilter(term) {
         this.filterTerm = term.toLowerCase();
-        const logs = this.dom.logContainer.children;
-        for (let div of logs) {
-            if (div.classList.contains('py-0.5')) {
-                const text = div.textContent.toLowerCase();
-                const shouldHide = this.filterTerm && !text.includes(this.filterTerm);
-                div.classList.toggle('hidden', shouldHide);
+        
+        // If no filter, show all
+        if (!this.filterTerm) {
+            const logs = this.dom.logContainer.children;
+            for (let div of logs) {
+                if (div.classList.contains('py-0.5')) {
+                    div.classList.remove('hidden');
+                }
             }
+            return;
         }
+        
+        // Filter in-memory lines and re-render (faster than DOM manipulation)
+        const filtered = this.lines.filter(line => 
+            line.toLowerCase().includes(this.filterTerm)
+        );
+        
+        // Clear and render filtered results
+        this.dom.logContainer.innerHTML = '';
+        this.renderLines(filtered, false); // Don't scroll during filter
     }
 
+    renderLines(lines, shouldScroll = true) {
+        // Render lines in chunks to avoid blocking
+        const frag = document.createDocumentFragment();
+        let count = 0;
+        
+        for (const text of lines) {
+            const el = this.createLogElement(text);
+            if (el) frag.appendChild(el);
+            
+            // Yield control every N lines
+            if (++count % this.renderChunkSize === 0) {
+                this.dom.logContainer.appendChild(frag);
+                // Small delay to let browser breathe
+                if (lines.length > 1000) {
+                    setTimeout(() => {}, 0);
+                }
+            }
+        }
+        
+        // Append remaining
+        if (frag.childNodes.length > 0) {
+            this.dom.logContainer.appendChild(frag);
+        }
+        
+        if (shouldScroll) this.scrollToBottom();
+    }
+    
     scrollToBottom() {
         if (!this.isUserScrolling) {
-            this.dom.logContainer.scrollTop = this.dom.logContainer.scrollHeight;
+            // Use RAF for smooth scrolling
+            requestAnimationFrame(() => {
+                this.dom.logContainer.scrollTop = this.dom.logContainer.scrollHeight;
+            });
         }
     }
 
@@ -238,6 +332,37 @@ class LogViewer {
         el.className = `px-2 py-0.5 rounded text-[10px] font-bold uppercase text-white ${colorClass}`;
         el.style.display = 'block';
         setTimeout(() => { el.style.display = 'none'; }, 3000); // Hide after 3s
+    }
+    
+    // Theme Management
+    loadTheme() {
+        const saved = localStorage.getItem('ezlog-theme') || 'dark';
+        this.applyTheme(saved);
+    }
+    
+    cycleTheme() {
+        const themes = ['dark', 'light', 'solarized-light'];
+        const current = document.documentElement.className;
+        const currentIndex = themes.indexOf(current) || 0;
+        const next = themes[(currentIndex + 1) % themes.length];
+        this.applyTheme(next);
+    }
+    
+    applyTheme(theme) {
+        document.documentElement.className = theme;
+        localStorage.setItem('ezlog-theme', theme);
+        
+        // Update theme button icon
+        const icons = { 'dark': '🌙', 'light': '☀️', 'solarized-light': '🎨' };
+        if (this.dom.themeBtn) {
+            this.dom.themeBtn.textContent = icons[theme] || '🎨';
+        }
+    }
+    
+    showLoading(show) {
+        if (this.dom.loading) {
+            this.dom.loading.classList.toggle('hidden', !show);
+        }
     }
 }
 

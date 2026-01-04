@@ -86,13 +86,28 @@ async def websocket_endpoint(ws: WebSocket, alias: str):
             # Marker
             await ws.send_text(json.dumps({"type": "sys", "msg": "__LIVE_START__"}))
 
-            # 2. Live Tailing
+            # 2. Live Tailing with Batching
+            live_buffer = []
+            batch_interval = 0.3  # 300ms batching for better performance
+            last_send = asyncio.get_event_loop().time()
+            
             while True:
                 line = f.readline()
                 if line:
-                    # Sending as JSON allows frontend to differentiate types later
-                    await ws.send_text(json.dumps({"type": "log", "data": line.rstrip()}))
+                    live_buffer.append(line.rstrip())
+                    
+                    # Send batch if buffer is large or time elapsed
+                    current_time = asyncio.get_event_loop().time()
+                    if len(live_buffer) >= 50 or (current_time - last_send) >= batch_interval:
+                        await ws.send_text(json.dumps({"type": "log_batch", "data": live_buffer}))
+                        live_buffer = []
+                        last_send = current_time
                 else:
+                    # No new lines - send any pending buffer and wait
+                    if live_buffer:
+                        await ws.send_text(json.dumps({"type": "log_batch", "data": live_buffer}))
+                        live_buffer = []
+                        last_send = asyncio.get_event_loop().time()
                     await asyncio.sleep(0.1)
 
     except WebSocketDisconnect:

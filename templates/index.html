@@ -15,7 +15,14 @@
                     colors: {
                         gray: { 900: '#1e1e1e', 800: '#252526', 700: '#333333', 
                                 600: '#3e3e42', 500: '#505050' },
-                        blue: { 500: '#007acc' }
+                        blue: { 500: '#007acc' },
+                        // Solarized colors
+                        solarized: {
+                            base03: '#002b36', base02: '#073642', base01: '#586e75', base00: '#657b83',
+                            base0: '#839496', base1: '#93a1a1', base2: '#eee8d5', base3: '#fdf6e3',
+                            yellow: '#b58900', orange: '#cb4b16', red: '#dc322f', magenta: '#d33682',
+                            violet: '#6c71c4', blue: '#268bd2', cyan: '#2aa198', green: '#859900'
+                        }
                     }
                 }
             }
@@ -29,11 +36,40 @@
         /* Desktop: Custom scrollbar */
         @media (min-width: 768px) {
             ::-webkit-scrollbar { width: 12px; height: 12px; }
-            ::-webkit-scrollbar-track { background: #1e1e1e; }
-            ::-webkit-scrollbar-thumb { background: #424242; border-radius: 6px; border: 3px solid #1e1e1e; }
-            ::-webkit-scrollbar-thumb:hover { background: #5a5a5a; }
+            ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+            ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 6px; border: 3px solid var(--scrollbar-track); }
+            ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
         }
         .log-font { font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; }
+        
+        /* Theme-specific scrollbar colors */
+        .dark { --scrollbar-track: #1e1e1e; --scrollbar-thumb: #424242; --scrollbar-thumb-hover: #5a5a5a; }
+        .light { --scrollbar-track: #f5f5f5; --scrollbar-thumb: #d0d0d0; --scrollbar-thumb-hover: #b0b0b0; }
+        .solarized-light { --scrollbar-track: #fdf6e3; --scrollbar-thumb: #93a1a1; --scrollbar-thumb-hover: #657b83; }
+        
+        /* Light theme overrides */
+        .light { background: #ffffff; color: #333333; }
+        .light .bg-gray-900 { background: #f5f5f5 !important; }
+        .light .bg-gray-800 { background: #ffffff !important; border-color: #e0e0e0 !important; }
+        .light .bg-gray-700 { background: #f0f0f0 !important; }
+        .light .text-gray-300 { color: #555555 !important; }
+        .light .text-gray-400 { color: #666666 !important; }
+        .light .text-gray-500 { color: #888888 !important; }
+        .light .border-gray-600 { border-color: #d0d0d0 !important; }
+        .light .hover\\:bg-gray-700:hover { background: #e8e8e8 !important; }
+        .light .hover\\:bg-gray-800:hover { background: #f5f5f5 !important; }
+        
+        /* Solarized light theme */
+        .solarized-light { background: #fdf6e3; color: #657b83; }
+        .solarized-light .bg-gray-900 { background: #fdf6e3 !important; }
+        .solarized-light .bg-gray-800 { background: #eee8d5 !important; border-color: #93a1a1 !important; }
+        .solarized-light .bg-gray-700 { background: #eee8d5 !important; }
+        .solarized-light .text-gray-300 { color: #657b83 !important; }
+        .solarized-light .text-gray-400 { color: #586e75 !important; }
+        .solarized-light .text-gray-500 { color: #93a1a1 !important; }
+        .solarized-light .border-gray-600 { border-color: #93a1a1 !important; }
+        .solarized-light .hover\\:bg-gray-700:hover { background: #e3dcc7 !important; }
+        .solarized-light .hover\\:bg-gray-800:hover { background: #e3dcc7 !important; }
     </style>
 </head>
 <!-- h-[100dvh] fixes scroll issues on mobile browsers with address bars -->
@@ -79,6 +115,9 @@
             </div>
 
             <div class="flex items-center space-x-2">
+                <!-- Theme Switcher -->
+                <button id="themeBtn" class="text-gray-400 hover:text-white text-lg px-2" title="Switch Theme">🎨</button>
+                
                 <!-- Content Search (Hidden on very small screens if needed, or condensed) -->
                 <div class="relative group">
                     <input type="text" id="logFilter" placeholder="Filter..." 
@@ -99,8 +138,12 @@
         <!-- LOG VIEWER AREA -->
         <div id="logContainer" class="flex-1 overflow-y-auto p-2 md:p-4 log-font leading-relaxed whitespace-pre-wrap break-all relative">
             <div id="welcomeMsg" class="h-full flex flex-col items-center justify-center text-gray-500 text-center">
-                <p class="text-lg">Select a log file.</p>
-                <p class="text-sm mt-2 opacity-70">Use the sidebar to start.</p>
+                <p class="text-lg">📋 Select a log file</p>
+                <p class="text-sm mt-2 opacity-70">Use the sidebar to start streaming</p>
+            </div>
+            <!-- Loading indicator -->
+            <div id="loadingIndicator" class="hidden fixed top-20 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg animate-pulse">
+                Loading logs...
             </div>
         </div>
     </main>

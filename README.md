@@ -28,7 +28,7 @@ wget https://github.com/legeRise/ezlog/releases/latest/download/ezlog-linux-x64.
 ### Step 2: Extract the archive
 
 ```bash
-tar -xzf ezlog-linux-x64-v1.0.0.tar.gz
+tar -xzf ezlog-linux-x64.tar.gz
 cd ezlog-linux-x64
 ```
 
