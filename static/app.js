@@ -10,6 +10,17 @@ class LogViewer {
         this.filterTerm = "";
         this.isUserScrolling = false;
         
+        // File metadata
+        this.fileSize = 0;
+        this.totalLines = 0;
+        this.fileSizeHuman = "";
+        this.currentStartLine = 0;
+        this.currentEndLine = 0;
+        this.isAtTop = false;
+        this.isAtBottom = true;
+        this.isLive = true;
+        this.isLoadingHistory = false;
+        
         // Performance: In-memory line buffer (circular buffer with max limit)
         this.lines = []; // Store all lines in memory
         this.maxLines = 10000; // Limit to prevent memory bloat
@@ -32,7 +43,11 @@ class LogViewer {
             filterInput: document.getElementById('logFilter'),
             welcome: document.getElementById('welcomeMsg'),
             themeBtn: document.getElementById('themeBtn'),
-            loading: document.getElementById('loadingIndicator')
+            loading: document.getElementById('loadingIndicator'),
+            fileInfo: document.getElementById('fileInfo'),
+            goTopBtn: document.getElementById('goTopBtn'),
+            goBottomBtn: document.getElementById('goBottomBtn'),
+            historyLoader: document.getElementById('historyLoader')
         };
 
         this.init();
@@ -65,6 +80,14 @@ class LogViewer {
         this.dom.pauseBtn.addEventListener('click', () => this.togglePause());
         this.dom.themeBtn.addEventListener('click', () => this.cycleTheme());
         
+        if (this.dom.goTopBtn) {
+            this.dom.goTopBtn.addEventListener('click', () => this.goToTop());
+        }
+        
+        if (this.dom.goBottomBtn) {
+            this.dom.goBottomBtn.addEventListener('click', () => this.goToBottom());
+        }
+        
         document.getElementById('clearBtn').addEventListener('click', () => {
             this.dom.logContainer.innerHTML = '';
             this.lines = []; // Clear memory buffer too
@@ -82,7 +105,23 @@ class LogViewer {
                 this.scrollThrottle = requestAnimationFrame(() => {
                     const container = this.dom.logContainer;
                     const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+                    const distanceToTop = container.scrollTop;
+                    
                     this.isUserScrolling = distanceToBottom > 50;
+                    
+                    // Load more history when scrolling near top
+                    if (distanceToTop < 100 && !this.isLoadingHistory && !this.isAtTop && this.currentStartLine > 1) {
+                        this.loadMoreHistory();
+                    }
+                    
+                    // Load newer history when scrolling down (near bottom but not live)
+                    if (distanceToBottom < 100 && !this.isLoadingHistory && !this.isLive && this.currentEndLine < this.totalLines) {
+                        this.loadNewerHistory();
+                    }
+                    
+                    // Update button visibility
+                    this.updateNavigationButtons();
+                    
                     this.scrollThrottle = null;
                 });
             }
@@ -128,7 +167,14 @@ class LogViewer {
         this.isUserScrolling = false;
         this.pauseBuffer = [];
         this.lines = []; // Clear in-memory buffer
+        this.currentStartLine = 0;
+        this.currentEndLine = 0;
+        this.isAtTop = false;
+        this.isAtBottom = true;
+        this.isLive = true;
+        this.updateFileInfo();
         this.updatePendingCount();
+        this.updateNavigationButtons();
 
         if (this.ws) this.ws.close();
 
@@ -151,7 +197,17 @@ class LogViewer {
         this.ws.onmessage = (e) => {
             const msg = JSON.parse(e.data);
             
-            if (msg.type === 'sys') {
+            if (msg.type === 'metadata') {
+                this.fileSize = msg.size;
+                this.totalLines = msg.lines;
+                this.fileSizeHuman = msg.size_human;
+                // Set initial line range to last 500 lines
+                this.currentStartLine = Math.max(1, this.totalLines - 499);
+                this.currentEndLine = this.totalLines;
+                this.updateFileInfo();
+                this.updateNavigationButtons();
+            }
+            else if (msg.type === 'sys') {
                 if (msg.msg === '__LIVE_START__') this.appendDivider();
                 else this.appendLog(msg.msg, 'text-gray-500 italic');
             } 
@@ -177,6 +233,11 @@ class LogViewer {
         // Add to in-memory buffer
         this.lines.push(...lines);
         
+        // Update end line when receiving new lines
+        if (this.isLive) {
+            this.currentEndLine = this.totalLines;
+        }
+        
         // Trim if exceeded max lines (circular buffer)
         if (this.lines.length > this.maxLines) {
             const excess = this.lines.length - this.maxLines;
@@ -185,6 +246,8 @@ class LogViewer {
         
         // Render in chunks to avoid blocking UI
         this.renderLines(lines);
+        this.updateFileInfo();
+        this.updateNavigationButtons();
     }
 
     appendLog(text, extraClass = '') {
@@ -214,7 +277,7 @@ class LogViewer {
         const isHidden = this.filterTerm && !text.toLowerCase().includes(this.filterTerm);
         
         const div = document.createElement('div');
-        div.className = `py-0.5 px-2 hover:bg-gray-800 border-b border-transparent hover:border-gray-700 ${extraClass} ${isHidden ? 'hidden' : ''}`;
+        div.className = `py-1 px-3 hover:bg-gray-800 border-b border-transparent hover:border-gray-700 ${extraClass} ${isHidden ? 'hidden' : ''}`;
         
         // Syntax Highlighting
         if (text.includes('ERROR') || text.includes('CRITICAL')) div.classList.add('text-red-400');
@@ -362,6 +425,199 @@ class LogViewer {
     showLoading(show) {
         if (this.dom.loading) {
             this.dom.loading.classList.toggle('hidden', !show);
+        }
+    }
+    
+    updateFileInfo() {
+        if (!this.dom.fileInfo) return;
+        
+        if (this.totalLines === 0) {
+            this.dom.fileInfo.textContent = '';
+            return;
+        }
+        
+        // Simplified: just show size and total lines
+        const info = `${this.fileSizeHuman} • ${this.totalLines.toLocaleString()} lines`;
+        this.dom.fileInfo.textContent = info;
+    }
+    
+    updateNavigationButtons() {
+        // Show/hide Go to Top button
+        if (this.dom.goTopBtn) {
+            if (this.currentStartLine > 1) {
+                this.dom.goTopBtn.classList.remove('hidden');
+            } else {
+                this.dom.goTopBtn.classList.add('hidden');
+            }
+        }
+        
+        // Show/hide Go to Bottom button
+        if (this.dom.goBottomBtn) {
+            if (!this.isLive || !this.isAtBottom) {
+                this.dom.goBottomBtn.classList.remove('hidden');
+            } else {
+                this.dom.goBottomBtn.classList.add('hidden');
+            }
+        }
+    }
+    
+    async goToTop() {
+        if (!this.currentAlias) return;
+        
+        this.showLoading(true);
+        
+        try {
+            const response = await fetch(`/api/logs/${encodeURIComponent(this.currentAlias)}/history?direction=top&count=500`);
+            const data = await response.json();
+            
+            if (data.error) {
+                console.error('Error fetching top:', data.error);
+                return;
+            }
+            
+            // Disconnect WebSocket (stop live tailing)
+            if (this.ws) {
+                this.ws.close();
+                this.ws = null;
+            }
+            
+            this.isLive = false;
+            this.isAtTop = true;
+            this.isAtBottom = false;
+            
+            // Clear and render
+            this.dom.logContainer.innerHTML = '';
+            this.lines = data.lines;
+            this.currentStartLine = data.start_line;
+            this.currentEndLine = data.end_line;
+            
+            this.renderLines(data.lines, false);
+            this.dom.logContainer.scrollTop = 0;
+            
+            this.updateFileInfo();
+            this.updateNavigationButtons();
+            this.updateStatus('Viewing history', 'bg-gray-600');
+            
+        } catch (error) {
+            console.error('Error loading top:', error);
+        } finally {
+            this.showLoading(false);
+        }
+    }
+    
+    goToBottom() {
+        // Reconnect to WebSocket to get live stream
+        this.connect(this.currentAlias);
+    }
+    
+    async loadMoreHistory() {
+        if (this.isLoadingHistory || this.isAtTop || this.currentStartLine <= 1) return;
+        
+        this.isLoadingHistory = true;
+        
+        if (this.dom.historyLoader) {
+            this.dom.historyLoader.classList.remove('hidden');
+        }
+        
+        try {
+            const response = await fetch(`/api/logs/${encodeURIComponent(this.currentAlias)}/history?direction=up&before_line=${this.currentStartLine}&count=500`);
+            const data = await response.json();
+            
+            if (data.error || data.lines.length === 0) {
+                this.isAtTop = true;
+                return;
+            }
+            
+            // Save scroll position
+            const container = this.dom.logContainer;
+            const oldScrollHeight = container.scrollHeight;
+            const oldScrollTop = container.scrollTop;
+            
+            // Prepend lines to buffer and DOM
+            this.lines.unshift(...data.lines);
+            this.currentStartLine = data.start_line;
+            this.isAtTop = !data.has_more;
+            
+            // Render at the beginning
+            this.prependLines(data.lines);
+            
+            // Restore scroll position (adjust for new content)
+            const newScrollHeight = container.scrollHeight;
+            container.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
+            
+            this.updateFileInfo();
+            this.updateNavigationButtons();
+            
+        } catch (error) {
+            console.error('Error loading history:', error);
+        } finally {
+            this.isLoadingHistory = false;
+            if (this.dom.historyLoader) {
+                this.dom.historyLoader.classList.add('hidden');
+            }
+        }
+    }
+    
+    prependLines(lines) {
+        const frag = document.createDocumentFragment();
+        
+        for (const text of lines) {
+            const el = this.createLogElement(text);
+            if (el) frag.appendChild(el);
+        }
+        
+        // Prepend to container
+        if (this.dom.logContainer.firstChild) {
+            this.dom.logContainer.insertBefore(frag, this.dom.logContainer.firstChild);
+        } else {
+            this.dom.logContainer.appendChild(frag);
+        }
+    }
+    
+    async loadNewerHistory() {
+        if (this.isLoadingHistory || this.isLive || this.currentEndLine >= this.totalLines) return;
+        
+        this.isLoadingHistory = true;
+        
+        if (this.dom.historyLoader) {
+            this.dom.historyLoader.classList.remove('hidden');
+            this.dom.historyLoader.textContent = 'Loading newer logs...';
+        }
+        
+        try {
+            const startLine = this.currentEndLine + 1;
+            const response = await fetch(`/api/logs/${encodeURIComponent(this.currentAlias)}/history?direction=up&before_line=${startLine + 500}&count=500`);
+            const data = await response.json();
+            
+            if (data.error || data.lines.length === 0) {
+                return;
+            }
+            
+            // Append lines to buffer and DOM
+            this.lines.push(...data.lines);
+            this.currentEndLine = data.end_line;
+            
+            // Check if we've reached the end
+            if (this.currentEndLine >= this.totalLines) {
+                // Reconnect to get live stream
+                this.goToBottom();
+                return;
+            }
+            
+            // Render at the end
+            this.renderLines(data.lines, false);
+            
+            this.updateFileInfo();
+            this.updateNavigationButtons();
+            
+        } catch (error) {
+            console.error('Error loading newer history:', error);
+        } finally {
+            this.isLoadingHistory = false;
+            if (this.dom.historyLoader) {
+                this.dom.historyLoader.classList.add('hidden');
+                this.dom.historyLoader.textContent = 'Loading older logs...';
+            }
         }
     }
 }

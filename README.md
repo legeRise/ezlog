@@ -8,7 +8,13 @@ A standalone, web-based log viewer with real-time streaming.
 - 📁 Track multiple logs with simple aliases
 - 🌐 Web interface for easy viewing
 - 🚀 Standalone binary - no Python installation needed
-- ⚡ Fast and lightweight - ~15MB total size
+- ⚡ Fast loading - shows last 500 lines instantly
+- 🔄 Infinite scroll - loads history as you scroll up
+- 🎯 Navigation buttons - jump to top/bottom quickly
+- ⏸️ Pause/Resume - buffer logs while you read
+- 🔍 Real-time filtering
+- 🎨 Multiple themes (Dark, Light, Solarized)
+- 📱 Mobile responsive
 - 🔧 Simple CLI for log management
 
 ---
@@ -55,7 +61,7 @@ Now that ezlog is installed system-wide, you can delete the download folder:
 ```bash
 cd ~/Downloads
 rm -rf ezlog-linux-x64
-rm ezlog-linux-x64-v1.0.0.tar.gz
+rm ezlog-linux-x64.tar.gz
 ```
 
 ### Step 6: Use ezlog
@@ -66,6 +72,9 @@ ezlog list
 ezlog start
 # Open browser: http://localhost:9200
 ```
+
+![EZLog Dashboard](docs/images/dashboard.png)
+*Screenshot: Main view showing log list in sidebar*
 
 ---
 
@@ -165,6 +174,12 @@ Open your browser and go to: `http://localhost:9200`
 
 You'll see a web interface with all your tracked logs listed. Click any alias (nginx, myapp, api, etc.) to view that log in real-time.
 
+![Log Viewer](docs/images/bottom.png)
+*Screenshot: Log file selected and displaying live logs*
+
+![Top View](docs/images/top.png)
+*Screenshot: Scrolled to top of log file showing oldest entries*
+
 ### Managing Your Logs
 
 **Update a log path:**
@@ -192,6 +207,7 @@ ezlog start --port 9200 --host 127.0.0.1
 ```bash
 ezlog status          # Check if running
 ezlog stop            # Stop background process
+ezlog start           # Start in background
 ezlog run             # Run in foreground (for debugging)
 ```
 
@@ -209,9 +225,12 @@ This means each user on the system can track their own logs independently.
 ## How it works
 
 1. Track log files with aliases
-2. Start the web server
+2. Start the web server (runs in background)
 3. View logs in real-time through your browser
 4. WebSocket streams new log lines as they're written
+5. Scroll up to load history in 500-line chunks
+6. Use navigation buttons to jump to top/bottom
+7. Pause to read, resume to continue streaming
 
 ## Uninstall
 

@@ -40,7 +40,7 @@
             ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 6px; border: 3px solid var(--scrollbar-track); }
             ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
         }
-        .log-font { font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; }
+        .log-font { font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 1.6; }
         
         /* Theme-specific scrollbar colors */
         .dark { --scrollbar-track: #1e1e1e; --scrollbar-thumb: #424242; --scrollbar-thumb-hover: #5a5a5a; }
@@ -49,27 +49,37 @@
         
         /* Light theme overrides */
         .light { background: #ffffff; color: #333333; }
-        .light .bg-gray-900 { background: #f5f5f5 !important; }
-        .light .bg-gray-800 { background: #ffffff !important; border-color: #e0e0e0 !important; }
-        .light .bg-gray-700 { background: #f0f0f0 !important; }
-        .light .text-gray-300 { color: #555555 !important; }
+        .light .bg-gray-900 { background: #fafafa !important; }
+        .light .bg-gray-800 { background: #ffffff !important; border-color: #e5e5e5 !important; }
+        .light .bg-gray-700 { background: #f5f5f5 !important; }
+        .light .text-gray-300 { color: #444444 !important; }
         .light .text-gray-400 { color: #666666 !important; }
-        .light .text-gray-500 { color: #888888 !important; }
-        .light .border-gray-600 { border-color: #d0d0d0 !important; }
-        .light .hover\\:bg-gray-700:hover { background: #e8e8e8 !important; }
-        .light .hover\\:bg-gray-800:hover { background: #f5f5f5 !important; }
+        .light .text-gray-500 { color: #999999 !important; }
+        .light .border-gray-600 { border-color: #d5d5d5 !important; }
+        .light .hover\\:bg-gray-700:hover { background: #ebebeb !important; }
+        .light .hover\\:bg-gray-800:hover { background: #f8f8f8 !important; }
+        .light .hover\\:border-gray-700 { border-color: #e0e0e0 !important; }
+        .light .text-red-400 { color: #c53030 !important; }
+        .light .text-yellow-400 { color: #d97706 !important; }
+        .light .text-blue-400 { color: #2563eb !important; }
+        .light .text-green-400 { color: #059669 !important; }
         
         /* Solarized light theme */
         .solarized-light { background: #fdf6e3; color: #657b83; }
         .solarized-light .bg-gray-900 { background: #fdf6e3 !important; }
-        .solarized-light .bg-gray-800 { background: #eee8d5 !important; border-color: #93a1a1 !important; }
-        .solarized-light .bg-gray-700 { background: #eee8d5 !important; }
-        .solarized-light .text-gray-300 { color: #657b83 !important; }
-        .solarized-light .text-gray-400 { color: #586e75 !important; }
+        .solarized-light .bg-gray-800 { background: #eee8d5 !important; border-color: #d3cbb7 !important; }
+        .solarized-light .bg-gray-700 { background: #f5eedb !important; }
+        .solarized-light .text-gray-300 { color: #586e75 !important; }
+        .solarized-light .text-gray-400 { color: #657b83 !important; }
         .solarized-light .text-gray-500 { color: #93a1a1 !important; }
-        .solarized-light .border-gray-600 { border-color: #93a1a1 !important; }
-        .solarized-light .hover\\:bg-gray-700:hover { background: #e3dcc7 !important; }
-        .solarized-light .hover\\:bg-gray-800:hover { background: #e3dcc7 !important; }
+        .solarized-light .border-gray-600 { border-color: #d3cbb7 !important; }
+        .solarized-light .hover\\:bg-gray-700:hover { background: #e8e1ce !important; }
+        .solarized-light .hover\\:bg-gray-800:hover { background: #f0e9d6 !important; }
+        .solarized-light .hover\\:border-gray-700 { border-color: #cdc4af !important; }
+        .solarized-light .text-red-400 { color: #dc322f !important; }
+        .solarized-light .text-yellow-400 { color: #b58900 !important; }
+        .solarized-light .text-blue-400 { color: #268bd2 !important; }
+        .solarized-light .text-green-400 { color: #859900 !important; }
     </style>
 </head>
 <!-- h-[100dvh] fixes scroll issues on mobile browsers with address bars -->
@@ -106,15 +116,26 @@
         
         <!-- TOP TOOLBAR -->
         <header class="h-14 bg-gray-800 border-b border-gray-600 flex items-center justify-between px-4 shadow-sm z-30 shrink-0">
-            <div class="flex items-center space-x-3 overflow-hidden">
+            <div class="flex items-center space-x-3 overflow-hidden flex-1 min-w-0">
                 <button id="toggleSidebar" class="text-gray-400 hover:text-white md:hidden p-1 border border-gray-600 rounded">
                     ☰
                 </button>
-                <h2 id="currentLogTitle" class="font-semibold text-white truncate text-sm md:text-base">Select a project</h2>
+                <div class="flex flex-col overflow-hidden flex-1 min-w-0">
+                    <h2 id="currentLogTitle" class="font-semibold text-white truncate text-sm md:text-base">Select a project</h2>
+                    <span id="fileInfo" class="text-[11px] md:text-xs text-blue-400 font-medium truncate"></span>
+                </div>
                 <span id="connectionStatus" class="px-2 py-0.5 rounded text-xs font-bold uppercase hidden"></span>
             </div>
 
             <div class="flex items-center space-x-2">
+                <!-- Navigation Buttons -->
+                <button id="goTopBtn" class="hidden text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded text-sm transition-colors hover:bg-gray-700" title="Go to Top">
+                    ⬆️ <span class="hidden md:inline">Top</span>
+                </button>
+                <button id="goBottomBtn" class="hidden text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded text-sm transition-colors hover:bg-gray-700" title="Go to Bottom">
+                    ⬇️ <span class="hidden md:inline">Bottom</span>
+                </button>
+                
                 <!-- Theme Switcher -->
                 <button id="themeBtn" class="text-gray-400 hover:text-white text-lg px-2" title="Switch Theme">🎨</button>
                 
@@ -136,7 +157,12 @@
         </header>
 
         <!-- LOG VIEWER AREA -->
-        <div id="logContainer" class="flex-1 overflow-y-auto p-2 md:p-4 log-font leading-relaxed whitespace-pre-wrap break-all relative">
+        <div id="logContainer" class="flex-1 overflow-y-auto p-3 md:p-4 log-font whitespace-pre-wrap break-all relative">
+            <!-- History loading indicator -->
+            <div id="historyLoader" class="hidden sticky top-0 left-0 right-0 bg-blue-500 text-white text-xs px-4 py-2 text-center z-10 shadow-md">
+                Loading older logs...
+            </div>
+            
             <div id="welcomeMsg" class="h-full flex flex-col items-center justify-center text-gray-500 text-center">
                 <p class="text-lg">📋 Select a log file</p>
                 <p class="text-sm mt-2 opacity-70">Use the sidebar to start streaming</p>
