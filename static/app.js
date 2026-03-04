@@ -20,6 +20,9 @@ class LogViewer {
         this.isAtBottom = true;
         this.isLive = true;
         this.isLoadingHistory = false;
+        this.isSearchMode = false;
+        this.lastSearchQuery = "";
+        this.searchResults = [];
         
         // Performance: In-memory line buffer (circular buffer with max limit)
         this.lines = []; // Store all lines in memory
@@ -39,6 +42,8 @@ class LogViewer {
             title: document.getElementById('currentLogTitle'),
             status: document.getElementById('connectionStatus'),
             pauseBtn: document.getElementById('pauseBtn'),
+            pauseLabel: document.getElementById('pauseLabel'),
+            downloadBtn: document.getElementById('downloadBtn'),
             pendingBadge: document.getElementById('pendingCount'),
             filterInput: document.getElementById('logFilter'),
             welcome: document.getElementById('welcomeMsg'),
@@ -78,6 +83,9 @@ class LogViewer {
         this.dom.overlay.addEventListener('click', () => toggleMenu(false));
 
         this.dom.pauseBtn.addEventListener('click', () => this.togglePause());
+        if (this.dom.downloadBtn) {
+            this.dom.downloadBtn.addEventListener('click', () => this.downloadCurrentLog());
+        }
         this.dom.themeBtn.addEventListener('click', () => this.cycleTheme());
         
         if (this.dom.goTopBtn) {
@@ -98,6 +106,30 @@ class LogViewer {
             clearTimeout(this.filterDebounce);
             this.filterDebounce = setTimeout(() => this.applyFilter(e.target.value), 300);
         });
+
+        this.dom.filterInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.searchFullFile(e.target.value);
+            } else if (e.key === 'Escape' && this.isSearchMode) {
+                e.preventDefault();
+                this.goToBottom();
+            }
+        });
+
+        window.addEventListener('popstate', () => {
+            const aliasFromPath = this.getAliasFromPath();
+            if (aliasFromPath && this.aliases[aliasFromPath]) {
+                this.connect(aliasFromPath, { updateRoute: false });
+            }
+        });
+
+        const initialAlias = (window.INITIAL_ALIAS && this.aliases[window.INITIAL_ALIAS])
+            ? window.INITIAL_ALIAS
+            : this.getAliasFromPath();
+        if (initialAlias && this.aliases[initialAlias]) {
+            this.connect(initialAlias, { updateRoute: false });
+        }
 
         // Throttled scroll detection using RAF
         this.dom.logContainer.addEventListener('scroll', () => {
@@ -143,7 +175,7 @@ class LogViewer {
                 }
 
                 btn.onclick = () => {
-                    this.connect(alias, btn);
+                    this.connect(alias);
                     // Mobile: Close sidebar after selection for better UX
                     if (window.innerWidth < 768) {
                         this.dom.sidebar.classList.add('-translate-x-full');
@@ -155,7 +187,9 @@ class LogViewer {
         });
     }
 
-    connect(alias) {
+    connect(alias, options = {}) {
+        const { updateRoute = true } = options;
+
         if (this.currentAlias === alias && this.ws?.readyState === 1) return;
         
         // Reset View
@@ -172,9 +206,16 @@ class LogViewer {
         this.isAtTop = false;
         this.isAtBottom = true;
         this.isLive = true;
+        this.isSearchMode = false;
+        this.lastSearchQuery = "";
+        this.searchResults = [];
         this.updateFileInfo();
         this.updatePendingCount();
         this.updateNavigationButtons();
+
+        if (updateRoute) {
+            this.updateRoute(alias);
+        }
 
         if (this.ws) this.ws.close();
 
@@ -212,7 +253,7 @@ class LogViewer {
                 else this.appendLog(msg.msg, 'text-gray-500 italic');
             } 
             else if (msg.type === 'log_batch') {
-                this.appendBatch(msg.data);
+                this.handleIncomingBatch(msg.data);
             }
             else if (msg.type === 'log') {
                 this.handleIncomingLog(msg.data);
@@ -226,6 +267,19 @@ class LogViewer {
             this.updatePendingCount();
         } else {
             this.appendLog(text);
+        }
+    }
+
+    handleIncomingBatch(lines) {
+        if (!Array.isArray(lines) || lines.length === 0) {
+            return;
+        }
+
+        if (this.isPaused) {
+            this.pauseBuffer.push(...lines);
+            this.updatePendingCount();
+        } else {
+            this.appendBatch(lines);
         }
     }
 
@@ -300,11 +354,12 @@ class LogViewer {
     togglePause() {
         this.isPaused = !this.isPaused;
         const btn = this.dom.pauseBtn;
+        const label = this.dom.pauseLabel;
         
         if (this.isPaused) {
             btn.classList.add('bg-yellow-700', 'border-yellow-500', 'text-white');
             btn.classList.remove('bg-gray-700');
-            btn.querySelector('span').textContent = "Resume";
+            if (label) label.textContent = "Resume";
             document.getElementById('pauseIcon').textContent = "▶";
         } else {
             if (this.pauseBuffer.length > 0) {
@@ -314,7 +369,7 @@ class LogViewer {
             }
             btn.classList.remove('bg-yellow-700', 'border-yellow-500', 'text-white');
             btn.classList.add('bg-gray-700');
-            btn.querySelector('span').textContent = "Pause";
+            if (label) label.textContent = "Pause";
             document.getElementById('pauseIcon').textContent = "⏸";
         }
     }
@@ -336,7 +391,7 @@ class LogViewer {
         if (!this.filterTerm) {
             const logs = this.dom.logContainer.children;
             for (let div of logs) {
-                if (div.classList.contains('py-0.5')) {
+                if (div.classList.contains('py-1')) {
                     div.classList.remove('hidden');
                 }
             }
@@ -508,6 +563,164 @@ class LogViewer {
     goToBottom() {
         // Reconnect to WebSocket to get live stream
         this.connect(this.currentAlias);
+    }
+
+    async searchFullFile(rawTerm) {
+        const term = (rawTerm || '').trim();
+
+        if (!this.currentAlias) {
+            this.updateStatus('Select a log first', 'bg-yellow-600');
+            return;
+        }
+
+        if (!term) {
+            this.updateStatus('Search query is empty', 'bg-yellow-600');
+            return;
+        }
+
+        this.showLoading(true);
+
+        try {
+            const response = await fetch(`/api/logs/${encodeURIComponent(this.currentAlias)}/search?q=${encodeURIComponent(term)}&limit=300`);
+            const data = await response.json();
+
+            if (data.error) {
+                this.updateStatus('Search failed', 'bg-red-600');
+                return;
+            }
+
+            if (this.ws) {
+                this.ws.close();
+                this.ws = null;
+            }
+
+            this.isLive = false;
+            this.isAtBottom = false;
+            this.isSearchMode = true;
+            this.lastSearchQuery = term;
+
+            this.searchResults = data.matches || [];
+            this.dom.logContainer.innerHTML = '';
+            this.lines = this.searchResults.map(match => `L${match.line} | ${match.text}`);
+
+            if (this.searchResults.length === 0) {
+                this.appendLog(`No matches found for: ${term}`, 'text-gray-500 italic');
+            } else {
+                this.renderSearchResults(this.searchResults, term);
+            }
+
+            this.currentStartLine = 1;
+            this.currentEndLine = this.totalLines;
+            this.updateFileInfo();
+            this.updateNavigationButtons();
+
+            const suffix = data.truncated ? ' (truncated)' : '';
+            this.updateStatus(`Found ${data.count} matches${suffix}. Click a match to open context.`, 'bg-blue-600');
+        } catch (error) {
+            console.error('Error searching log:', error);
+            this.updateStatus('Search failed', 'bg-red-600');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    renderSearchResults(matches, term) {
+        this.dom.logContainer.innerHTML = '';
+        const frag = document.createDocumentFragment();
+
+        for (const match of matches) {
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'w-full text-left py-1 px-3 hover:bg-gray-800 border-b border-transparent hover:border-gray-700 text-blue-400';
+            row.textContent = `L${match.line} | ${match.text}`;
+            row.title = `Open context around line ${match.line}`;
+            row.addEventListener('click', () => this.openSearchContext(match.line, term));
+            frag.appendChild(row);
+        }
+
+        this.dom.logContainer.appendChild(frag);
+        this.dom.logContainer.scrollTop = 0;
+    }
+
+    async openSearchContext(lineNumber, term) {
+        if (!this.currentAlias) return;
+
+        this.showLoading(true);
+
+        try {
+            const response = await fetch(`/api/logs/${encodeURIComponent(this.currentAlias)}/history?direction=around&around_line=${lineNumber}&count=120`);
+            const data = await response.json();
+
+            if (data.error) {
+                this.updateStatus('Unable to load context', 'bg-red-600');
+                return;
+            }
+
+            this.isLive = false;
+            this.isAtBottom = false;
+            this.isSearchMode = true;
+
+            this.currentStartLine = data.start_line;
+            this.currentEndLine = data.end_line;
+
+            const contextual = data.lines.map((text, idx) => `L${data.start_line + idx} | ${text}`);
+            this.lines = contextual;
+            this.dom.logContainer.innerHTML = '';
+            this.renderLines(contextual, false);
+
+            const matchIndex = Math.max(0, lineNumber - data.start_line);
+            const matchElement = this.dom.logContainer.children[matchIndex];
+            if (matchElement) {
+                matchElement.classList.add('bg-blue-900/40', 'border-blue-500');
+                matchElement.scrollIntoView({ block: 'center' });
+            }
+
+            this.updateFileInfo();
+            this.updateNavigationButtons();
+            this.updateStatus(`Showing context around L${lineNumber} for "${term}"`, 'bg-blue-600');
+        } catch (error) {
+            console.error('Error loading search context:', error);
+            this.updateStatus('Unable to load context', 'bg-red-600');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    downloadCurrentLog() {
+        if (!this.currentAlias) {
+            this.updateStatus('Select a log first', 'bg-yellow-600');
+            return;
+        }
+
+        const url = `/api/logs/${encodeURIComponent(this.currentAlias)}/download`;
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.style.display = 'none';
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+    }
+
+    getAliasFromPath() {
+        const path = window.location.pathname || '/';
+        const prefix = '/logs/';
+        if (!path.startsWith(prefix)) return '';
+
+        const encodedAlias = path.slice(prefix.length);
+        if (!encodedAlias) return '';
+
+        try {
+            return decodeURIComponent(encodedAlias);
+        } catch {
+            return '';
+        }
+    }
+
+    updateRoute(alias) {
+        const target = `/logs/${encodeURIComponent(alias)}`;
+        if (window.location.pathname !== target) {
+            window.history.pushState({ alias }, '', target);
+        }
     }
     
     async loadMoreHistory() {

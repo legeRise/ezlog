@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 import json
 from collections import deque
 
@@ -60,6 +60,28 @@ def get_lines_range(filepath, start_line, count):
         return []
 
 
+def search_file_lines(filepath, term, limit=200):
+    """Search entire file and return matching lines with line numbers"""
+    if not term:
+        return []
+
+    matches = []
+    term_lower = term.lower()
+
+    try:
+        with open(filepath, 'r', errors='replace') as f:
+            for line_no, line in enumerate(f, 1):
+                text = line.rstrip()
+                if term_lower in text.lower():
+                    matches.append({"line": line_no, "text": text})
+                    if len(matches) >= limit:
+                        break
+    except:
+        return []
+
+    return matches
+
+
 def get_resource_path(relative_path):
     """Get absolute path to resource - works for dev and PyInstaller"""
     if getattr(sys, 'frozen', False):
@@ -89,11 +111,30 @@ async def get_home(request: Request):
     """Serves the UI shell."""
     return templates.TemplateResponse("index.html", {
         "request": request, 
-        "aliases_json": json.dumps(load_tracked_logs())
+        "aliases_json": json.dumps(load_tracked_logs()),
+        "initial_alias": ""
+    })
+
+
+@app.get("/logs/{alias}", response_class=HTMLResponse)
+async def get_log_page(request: Request, alias: str):
+    """Serves the UI shell with an initial alias from route"""
+    logs = load_tracked_logs()
+    initial_alias = alias if alias in logs else ""
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "aliases_json": json.dumps(logs),
+        "initial_alias": initial_alias
     })
 
 @app.get("/api/logs/{alias}/history")
-async def get_log_history(alias: str, direction: str = "up", before_line: int = 0, count: int = 500):
+async def get_log_history(
+    alias: str,
+    direction: str = "up",
+    before_line: int = 0,
+    around_line: int = 0,
+    count: int = 500
+):
     """Fetch historical log lines for pagination"""
     logs = load_tracked_logs()
     
@@ -114,6 +155,15 @@ async def get_log_history(alias: str, direction: str = "up", before_line: int = 
         start_line = 1
         end_line = min(count, total_lines)
         has_more = end_line < total_lines
+    elif direction == "around":
+        if around_line <= 0:
+            return {"error": "around_line is required", "lines": []}
+
+        half = max(1, count // 2)
+        start_line = max(1, around_line - half)
+        lines = get_lines_range(filepath, start_line, count)
+        end_line = min(total_lines, start_line + len(lines) - 1)
+        has_more = start_line > 1 or end_line < total_lines
     else:  # direction == "up"
         # Fetch lines before the given line
         if before_line <= 1:
@@ -131,6 +181,52 @@ async def get_log_history(alias: str, direction: str = "up", before_line: int = 
         "has_more": has_more,
         "total_lines": total_lines
     }
+
+
+@app.get("/api/logs/{alias}/search")
+async def search_log(alias: str, q: str, limit: int = 200):
+    """Search full log file content (not just currently loaded chunk)"""
+    logs = load_tracked_logs()
+
+    if alias not in logs:
+        return {"error": "Log alias not found", "matches": []}
+
+    filepath = logs[alias]
+
+    if not os.path.exists(filepath):
+        return {"error": "Log file not found", "matches": []}
+
+    q = (q or "").strip()
+    if not q:
+        return {"error": "Search query cannot be empty", "matches": []}
+
+    limit = max(1, min(limit, 1000))
+    matches = search_file_lines(filepath, q, limit=limit)
+
+    return {
+        "query": q,
+        "matches": matches,
+        "count": len(matches),
+        "limit": limit,
+        "truncated": len(matches) >= limit
+    }
+
+
+@app.get("/api/logs/{alias}/download")
+async def download_log(alias: str):
+    """Download the full monitored log file for the given alias."""
+    logs = load_tracked_logs()
+
+    if alias not in logs:
+        return {"error": "Log alias not found"}
+
+    filepath = logs[alias]
+
+    if not os.path.exists(filepath):
+        return {"error": "Log file not found"}
+
+    filename = Path(filepath).name or f"{alias}.log"
+    return FileResponse(filepath, filename=filename, media_type="text/plain")
 
 @app.websocket("/ws/{alias}")
 async def websocket_endpoint(ws: WebSocket, alias: str):

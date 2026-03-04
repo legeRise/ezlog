@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 from tracked_logs import (
     add_tracked_log, update_tracked_log, remove_tracked_log,
-    load_tracked_logs, TRACKED_LOGS_FILE, APP_DIR
+    load_tracked_logs, save_tracked_logs, TRACKED_LOGS_FILE, APP_DIR
 )
 
 cli = typer.Typer()
@@ -77,6 +77,70 @@ def list():
         return
     for alias, path in data.items():
         typer.echo(f"{alias:15} {path}")
+
+
+@cli.command()
+def clear(yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt")):
+    """Remove all tracked logs"""
+    data = load_tracked_logs()
+    if not data:
+        typer.echo("No logs tracked")
+        return
+
+    if not yes:
+        typer.confirm(f"Remove all {len(data)} tracked logs?", abort=True)
+
+    save_tracked_logs({})
+    typer.echo(f"✅ Removed {len(data)} tracked logs")
+
+
+@cli.command()
+def check(missing_only: bool = typer.Option(False, "--missing-only", help="Show only missing files")):
+    """Check tracked logs and show whether each file exists"""
+    data = load_tracked_logs()
+    if not data:
+        typer.echo("No logs tracked")
+        return
+
+    missing_count = 0
+    for alias, path in data.items():
+        exists = os.path.isfile(path)
+        if not exists:
+            missing_count += 1
+        if missing_only and exists:
+            continue
+
+        status = "✅" if exists else "❌"
+        typer.echo(f"{status} {alias:15} {path}")
+
+    typer.echo(f"\nTotal: {len(data)} | Missing: {missing_count} | Healthy: {len(data) - missing_count}")
+
+
+@cli.command()
+def prune(yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt")):
+    """Remove tracked aliases whose files no longer exist"""
+    data = load_tracked_logs()
+    if not data:
+        typer.echo("No logs tracked")
+        return
+
+    missing_aliases = [alias for alias, path in data.items() if not os.path.isfile(path)]
+    if not missing_aliases:
+        typer.echo("No missing log paths found")
+        return
+
+    typer.echo("Missing aliases:")
+    for alias in missing_aliases:
+        typer.echo(f"- {alias}")
+
+    if not yes:
+        typer.confirm(f"Remove {len(missing_aliases)} missing aliases?", abort=True)
+
+    for alias in missing_aliases:
+        del data[alias]
+
+    save_tracked_logs(data)
+    typer.echo(f"✅ Removed {len(missing_aliases)} missing aliases")
 
 
 @cli.command()

@@ -13,9 +13,11 @@ A standalone, web-based log viewer with real-time streaming.
 - 🎯 Navigation buttons - jump to top/bottom quickly
 - ⏸️ Pause/Resume - buffer logs while you read
 - 🔍 Real-time filtering
+- 🔎 Full-file search (press Enter in filter box)
 - 🎨 Multiple themes (Dark, Light, Solarized)
 - 📱 Mobile responsive
 - 🔧 Simple CLI for log management
+- 🔗 Route-based log tabs (`/logs/<alias>`)
 
 ---
 
@@ -174,6 +176,10 @@ Open your browser and go to: `http://localhost:9200`
 
 You'll see a web interface with all your tracked logs listed. Click any alias (nginx, myapp, api, etc.) to view that log in real-time.
 
+Tip: type in the filter box to filter currently loaded lines. Press **Enter** to search the entire file and show global matches.
+
+Each selected log updates the URL to `/logs/<alias>`, so you can open different aliases in different tabs and share direct links.
+
 ![Log Viewer](docs/images/bottom.png)
 *Screenshot: Log file selected and displaying live logs*
 
@@ -192,6 +198,26 @@ ezlog update myapp /home/user/newpath/app.log
 ```bash
 # Stop tracking a log file
 ezlog remove cron
+```
+
+**Remove all tracked logs (with confirmation):**
+```bash
+ezlog clear
+# or non-interactive
+ezlog clear --yes
+```
+
+**Check tracked logs health (missing paths):**
+```bash
+ezlog check
+ezlog check --missing-only
+```
+
+**Prune dead aliases automatically:**
+```bash
+ezlog prune
+# or non-interactive
+ezlog prune --yes
 ```
 
 **Custom port and host:**

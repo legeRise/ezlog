@@ -141,16 +141,18 @@
                 
                 <!-- Content Search (Hidden on very small screens if needed, or condensed) -->
                 <div class="relative group">
-                    <input type="text" id="logFilter" placeholder="Filter..." 
+                    <input type="text" id="logFilter" placeholder="Filter (Enter=full file)..." 
                         class="bg-gray-900 border border-gray-600 text-sm rounded-md px-2 py-1.5 w-24 focus:w-48 md:w-48 transition-all focus:outline-none focus:border-blue-500">
                 </div>
 
                 <!-- Pause Button -->
                 <button id="pauseBtn" class="flex items-center space-x-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors border border-gray-600">
                     <span id="pauseIcon">⏸</span>
-                    <span class="hidden md:inline">Pause</span>
+                    <span id="pauseLabel" class="hidden md:inline">Pause</span>
                     <span id="pendingCount" class="ml-1 bg-blue-500 text-white text-[10px] px-1.5 rounded-full hidden">0</span>
                 </button>
+
+                <button id="downloadBtn" class="text-gray-400 hover:text-white text-sm px-2" title="Download Current Log">⬇️</button>
                 
                 <button id="clearBtn" class="text-gray-400 hover:text-red-400 text-sm px-2" title="Clear View">🚫</button>
             </div>
@@ -176,6 +178,7 @@
 
     <!-- Inject Aliases and Script -->
     <script>const ALIASES = {{ aliases_json|safe }};</script>
+    <script>const INITIAL_ALIAS = {{ initial_alias|tojson }};</script>
     <script src="/static/app.js"></script>
 </body>
 </html>
