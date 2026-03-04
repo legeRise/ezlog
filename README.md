@@ -18,6 +18,7 @@ A standalone, web-based log viewer with real-time streaming.
 - 📱 Mobile responsive
 - 🔧 Simple CLI for log management
 - 🔗 Route-based log tabs (`/logs/<alias>`)
+- ⬆️ One-command self-upgrade (`ezlog upgrade`)
 
 ---
 
@@ -75,6 +76,21 @@ ezlog start
 # Open browser: http://localhost:9200
 ```
 
+### Step 7: Upgrade later (easy)
+
+When a new release is available, just run:
+
+```bash
+ezlog upgrade
+```
+
+What it does:
+- Downloads latest release tarball
+- Compares installed binary vs downloaded binary
+- Skips install if already up-to-date
+- Stops running ezlog (if running), installs new release, restarts it
+- Reuses last host/port automatically on restart
+
 ![EZLog Dashboard](docs/images/dashboard.png)
 *Screenshot: Main view showing log list in sidebar*
 
@@ -95,11 +111,24 @@ ezlog start
    ```
    This creates `dist/ezlog/` with the standalone binary.
 
+   Notes:
+   - `build.sh` compiles a fresh binary using PyInstaller.
+   - `package.sh` does **not** compile; it only packages `dist/ezlog`.
+
 3. Install system-wide:
    ```bash
    sudo ./install.sh
    ```
    This installs the binary to `/usr/local/ezlog/` and creates a symlink at `/usr/local/bin/ezlog`.
+
+4. Create distribution tarball:
+
+   ```bash
+   chmod +x package.sh
+   ./package.sh
+   ```
+
+   This creates `ezlog-linux-x64.tar.gz` for GitHub Releases or direct sharing.
 
 ---
 
@@ -231,10 +260,20 @@ ezlog start --port 9200 --host 127.0.0.1
 
 **Process management:**
 ```bash
+ezlog version         # Show version + install details
 ezlog status          # Check if running
 ezlog stop            # Stop background process
 ezlog start           # Start in background
 ezlog run             # Run in foreground (for debugging)
+ezlog upgrade         # Auto-download and install latest release
+```
+
+**Upgrade options:**
+```bash
+ezlog upgrade --check-only               # Only check if update exists
+ezlog upgrade --yes                       # Non-interactive
+ezlog upgrade --no-restart                # Install only
+ezlog upgrade --port 9200 --host 0.0.0.0 # Restart target
 ```
 
 ### Where is tracking data stored?
