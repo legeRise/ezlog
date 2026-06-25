@@ -95,6 +95,32 @@ What it does:
 *Screenshot: Main view showing log list in sidebar*
 
 ---
+## Auth
+
+EZLog does not include built-in authentication. If you expose it on a server, put it behind Nginx Basic Auth.
+
+First, create a password file:
+
+```bash
+sudo apt update
+sudo apt install apache2-utils -y
+sudo htpasswd -c /etc/nginx/.ezlog_htpasswd yourusername
+```
+
+Then add Basic Auth inside the Nginx `location` block that proxies EZLog:
+
+```nginx
+location / {
+    auth_basic "EZLog";
+    auth_basic_user_file /etc/nginx/.ezlog_htpasswd;
+
+    proxy_pass http://127.0.0.1:9200;
+}
+```
+
+Use HTTPS at the proxy when exposing EZLog beyond a trusted local network.
+
+---
 
 ## 🛠️ Build from Source (For Developers)
 
