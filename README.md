@@ -133,16 +133,35 @@ Use HTTPS at the proxy when exposing EZLog beyond a trusted local network.
    cd ezlog
    ```
 
-2. Build the binary:
+2. **(Optional)** Bump the version number in `cli.py`:
+   ```bash
+   # Edit cli.py and change:
+   EZLOG_VERSION = "1.0.5"   →   EZLOG_VERSION = "1.1.0"
+   ```
+
+3. Build the binary:
    ```bash
    chmod +x build.sh
    ./build.sh
    ```
    This creates `dist/ezlog/` with the standalone binary.
 
+4. Package for distribution:
+   ```bash
+   chmod +x package.sh
+   ./package.sh
+   ```
+   This creates `ezlog-linux-x64.tar.gz` — ready for GitHub Releases or sharing.
+
+   **Build workflow summary:**
+   ```
+   Bump version in cli.py → ./build.sh → ./package.sh
+   ```
+
    Notes:
    - `build.sh` compiles a fresh binary using PyInstaller.
-   - `package.sh` does **not** compile; it only packages `dist/ezlog`.
+   - `package.sh` does **not** compile; it only packages `dist/ezlog` into a tarball.
+   - Always bump the version **before** building so the binary reports the correct version.
 
 3. Install system-wide:
    ```bash
