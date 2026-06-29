@@ -6,6 +6,8 @@ A standalone, web-based log viewer with real-time streaming.
 
 - 📊 Real-time log streaming via WebSockets
 - 📁 Track multiple logs with simple aliases
+- 🗂️ **Project grouping** - group related logs under collapsible project sections
+- 📂 **Folder import** - add all `.log` files from a folder as a project (`ezlog add-folder`)
 - 🌐 Web interface for easy viewing
 - 🚀 Standalone binary - no Python installation needed
 - ⚡ Fast loading - shows last 500 lines instantly
@@ -18,6 +20,7 @@ A standalone, web-based log viewer with real-time streaming.
 - 📱 Mobile responsive
 - 🔧 Simple CLI for log management
 - 🔗 Route-based log tabs (`/logs/<alias>`)
+- ✂️ Bulk remove (`ezlog remove alias1 alias2 alias3`)
 - ⬆️ One-command self-upgrade (`ezlog upgrade`)
 
 ---
@@ -196,18 +199,26 @@ Added nginx -> /var/log/nginx/access.log
 
 ### Step 2: Verify logs are tracked
 
-Check all tracked logs:
+Check all tracked logs (grouped by project):
 ```bash
 ezlog list
 ```
 
-Output:
+Output (flat aliases):
 ```
 nginx           /var/log/nginx/access.log
 myapp           /home/user/myapp/logs/app.log
-api             /opt/api-server/logs/api.log
-website         /var/www/website/errors.log
-cron            /home/user/scripts/cron.log
+```
+
+Output (project-grouped using dot notation, e.g. `project.sub_alias`):
+```
+📁 myapp:
+  • access             /var/log/nginx/access.log
+  • api                /opt/api-server/logs/api.log
+
+📁 website:
+  • errors             /var/www/website/errors.log
+  • cron               /home/user/scripts/cron.log
 ```
 
 Now you can see all your logs and their aliases at a glance.
@@ -243,16 +254,44 @@ Each selected log updates the URL to `/logs/<alias>`, so you can open different 
 
 ### Managing Your Logs
 
+**Add a folder of logs (project grouping):**
+```bash
+# Add all .log files from a folder as a project
+ezlog add-folder /var/log/myapp/
+
+# Custom project name
+ezlog add-folder /var/log/myapp/ --project production
+
+# Use a custom extension pattern
+ezlog add-folder /var/log/nginx/ --pattern "*.access.log"
+
+# Include ALL files (not just .log)
+ezlog add-folder /var/log/myapp/ --all
+
+# Short flags
+ezlog add-folder /var/log/myapp/ -p myapp -a
+```
+
+All files are added as `project.filename` (e.g. `myapp.app`, `myapp.error`).  
+In the web UI, they appear grouped under a collapsible project section.
+
 **Update a log path:**
 ```bash
 # If your log file moves to a new location
 ezlog update myapp /home/user/newpath/app.log
 ```
 
-**Remove a log:**
+**Remove logs (single, bulk, or by project):**
 ```bash
-# Stop tracking a log file
-ezlog remove cron
+# Remove a single log
+ezlog remove myapp.api
+
+# Remove multiple logs at once
+ezlog remove myapp.api myapp.error myapp.cron
+
+# Remove an entire project group
+ezlog remove --project myapp
+ezlog remove --project myapp --yes     # Skip confirmation
 ```
 
 **Remove all tracked logs (with confirmation):**
@@ -271,6 +310,7 @@ ezlog check --missing-only
 **Prune dead aliases automatically:**
 ```bash
 ezlog prune
+ezlog prune --project myapp      # Scope to a project
 # or non-interactive
 ezlog prune --yes
 ```

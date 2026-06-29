@@ -176,8 +176,9 @@
         </div>
     </main>
 
-    <!-- Inject Aliases and Script -->
+    <!-- Inject Aliases, Groups and Script -->
     <script>const ALIASES = {{ aliases_json|safe }};</script>
+    <script>const GROUPS = {{ groups_json|safe }};</script>
     <script>const INITIAL_ALIAS = {{ initial_alias|tojson }};</script>
     <script src="/static/app.js"></script>
 </body>

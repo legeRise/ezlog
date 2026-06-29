@@ -1,8 +1,10 @@
 class LogViewer {
-    constructor(aliases) {
+    constructor(aliases, groups) {
         this.aliases = aliases;
+        this.groups = groups;
         this.ws = null;
         this.currentAlias = null;
+        this.currentProject = null;
         
         // State
         this.isPaused = false;
@@ -164,27 +166,135 @@ class LogViewer {
         this.dom.projectList.innerHTML = '';
         const lowerFilter = filterText.toLowerCase();
 
-        Object.keys(this.aliases).sort().forEach(alias => {
-            if (alias.toLowerCase().includes(lowerFilter)) {
-                const btn = document.createElement('button');
-                btn.className = `w-full text-left px-4 py-3 text-sm text-gray-400 hover:bg-gray-700 hover:text-white border-l-2 border-transparent transition-colors truncate`;
-                btn.textContent = alias;
-                
-                if (alias === this.currentAlias) {
-                    btn.classList.add('bg-gray-700', 'text-white', 'border-blue-500');
-                }
+        // Determine sort order: _root last
+        const groupKeys = Object.keys(this.groups).sort((a, b) => {
+            if (a === '_root') return 1;
+            if (b === '_root') return -1;
+            return a.localeCompare(b);
+        });
 
-                btn.onclick = () => {
-                    this.connect(alias);
-                    // Mobile: Close sidebar after selection for better UX
-                    if (window.innerWidth < 768) {
-                        this.dom.sidebar.classList.add('-translate-x-full');
-                        this.dom.overlay.classList.add('hidden');
-                    }
-                };
-                this.dom.projectList.appendChild(btn);
+        for (const groupKey of groupKeys) {
+            const items = this.groups[groupKey];
+            const shortNames = Object.keys(items).sort();
+
+            // Check if any log in this group matches the filter
+            const anyMatch = this.groupMatchesFilter(items, lowerFilter);
+            if (!anyMatch && lowerFilter) continue;
+
+            if (groupKey === '_root') {
+                // Project-less logs rendered directly
+                for (const short of shortNames) {
+                    const info = items[short];
+                    if (lowerFilter && !info.alias.toLowerCase().includes(lowerFilter)) continue;
+                    this.createLogButton(info.alias, short, null);
+                }
+            } else {
+                // Project group with collapsible section
+                const section = this.createProjectSection(groupKey, items, shortNames, lowerFilter);
+                this.dom.projectList.appendChild(section);
+            }
+        }
+    }
+
+    groupMatchesFilter(items, lowerFilter) {
+        if (!lowerFilter) return true;
+        for (const short of Object.keys(items)) {
+            if (items[short].alias.toLowerCase().includes(lowerFilter)) return true;
+            if (short.toLowerCase().includes(lowerFilter)) return true;
+        }
+        return false;
+    }
+
+    createProjectSection(projectName, items, shortNames, lowerFilter) {
+        const section = document.createElement('div');
+        section.className = 'border-b border-gray-600';
+
+        // Project header (always visible)
+        const header = document.createElement('button');
+        header.className = 'w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-gray-300 hover:bg-gray-700 hover:text-white transition-colors';
+        header.innerHTML = `
+            <span class="flex items-center gap-2">
+                <span class="text-blue-400">📁</span>
+                <span>${projectName}</span>
+                <span class="text-xs text-gray-500 font-normal">(${shortNames.length})</span>
+            </span>
+            <span class="project-chevron text-gray-500 transition-transform duration-200">▼</span>
+        `;
+
+        // Log list container (collapsible)
+        const logList = document.createElement('div');
+        logList.className = 'overflow-hidden transition-all duration-200';
+
+        // Determine if this project should be expanded
+        const currentProject = this.getProjectFromAlias(this.currentAlias);
+        const shouldExpand = (currentProject === projectName) || (!lowerFilter && !currentProject);
+        logList.style.maxHeight = shouldExpand ? (shortNames.length * 44 + 8) + 'px' : '0';
+
+        if (shouldExpand) {
+            header.querySelector('.project-chevron').classList.add('rotate-180');
+        }
+
+        header.addEventListener('click', () => {
+            const chevron = header.querySelector('.project-chevron');
+            const isOpen = logList.style.maxHeight !== '0px';
+            if (isOpen) {
+                logList.style.maxHeight = '0px';
+                chevron.classList.remove('rotate-180');
+            } else {
+                logList.style.maxHeight = (shortNames.length * 44 + 8) + 'px';
+                chevron.classList.add('rotate-180');
             }
         });
+
+        // Log item buttons
+        const listInner = document.createElement('div');
+        listInner.className = 'py-1';
+        for (const short of shortNames) {
+            const info = items[short];
+            if (lowerFilter && !info.alias.toLowerCase().includes(lowerFilter) && !short.toLowerCase().includes(lowerFilter)) continue;
+            this.createLogButton(info.alias, short, listInner, projectName);
+        }
+        logList.appendChild(listInner);
+
+        section.appendChild(header);
+        section.appendChild(logList);
+        return section;
+    }
+
+    getProjectFromAlias(alias) {
+        if (!alias) return null;
+        const dotIdx = alias.indexOf('.');
+        if (dotIdx === -1) return null;
+        return alias.substring(0, dotIdx);
+    }
+
+    createLogButton(alias, displayName, parent, projectName) {
+        const container = parent || this.dom.projectList;
+        const btn = document.createElement('button');
+        const isActive = alias === this.currentAlias;
+        
+        let classes = 'w-full text-left px-4 py-2 text-sm transition-colors truncate flex items-center gap-2';
+        if (projectName) {
+            classes += ' pl-8';  // indent sub-logs
+        }
+        if (isActive) {
+            classes += ' bg-gray-700 text-white border-l-2 border-blue-500';
+        } else {
+            classes += ' text-gray-400 hover:bg-gray-700 hover:text-white border-l-2 border-transparent';
+        }
+        btn.className = classes;
+
+        btn.innerHTML = `<span class="text-xs text-gray-500">📄</span><span>${displayName}</span>`;
+
+        btn.onclick = () => {
+            this.connect(alias);
+            // Mobile: Close sidebar after selection
+            if (window.innerWidth < 768) {
+                this.dom.sidebar.classList.add('-translate-x-full');
+                this.dom.overlay.classList.add('hidden');
+            }
+        };
+        container.appendChild(btn);
     }
 
     connect(alias, options = {}) {
@@ -194,8 +304,17 @@ class LogViewer {
         
         // Reset View
         this.currentAlias = alias;
+        this.currentProject = this.getProjectFromAlias(alias);
         this.renderSidebar(document.getElementById('projectSearch').value); 
-        this.dom.title.textContent = alias;
+        
+        // Show project context in title
+        const displayName = alias.includes('.') ? alias.split('.').pop() : alias;
+        if (this.currentProject) {
+            this.dom.title.textContent = `${this.currentProject} › ${displayName}`;
+            this.dom.title.title = alias;
+        } else {
+            this.dom.title.textContent = alias;
+        }
         this.dom.welcome.style.display = 'none';
         this.dom.logContainer.innerHTML = '';
         this.isUserScrolling = false;
@@ -836,5 +955,5 @@ class LogViewer {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    window.app = new LogViewer(ALIASES);
+    window.app = new LogViewer(ALIASES, GROUPS);
 });

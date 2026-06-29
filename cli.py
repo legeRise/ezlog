@@ -11,7 +11,10 @@ import json
 from pathlib import Path
 from tracked_logs import (
     add_tracked_log, update_tracked_log, remove_tracked_log,
-    load_tracked_logs, save_tracked_logs, TRACKED_LOGS_FILE, APP_DIR
+    remove_tracked_logs_bulk, remove_project,
+    load_tracked_logs, save_tracked_logs,
+    add_folder, group_logs_by_project, parse_alias,
+    TRACKED_LOGS_FILE, APP_DIR
 )
 
 cli = typer.Typer()
@@ -97,6 +100,28 @@ def add(alias: str, path: str):
         raise typer.Exit(1)
 
 
+@cli.command("add-folder")
+def add_folder_cmd(
+    folder_path: str = typer.Argument(..., help="Path to folder with log files"),
+    project: str = typer.Option(None, "--project", "-p", help="Project name (default: folder name)"),
+    all_files: bool = typer.Option(False, "--all", "-a", help="Include all files (not just .log)"),
+    pattern: str = typer.Option("*.log", "--pattern", "--ext", help="File pattern to match (default: *.log)")
+):
+    """Add all log files from a folder as a project group"""
+    try:
+        added = add_folder(folder_path, project=project, pattern=pattern, all_files=all_files)
+        if not added:
+            typer.echo("No new log files found to add.")
+            return
+        project_name = project if project else Path(folder_path).name
+        typer.echo(f"📁 Added {len(added)} files to project '{project_name}':")
+        for alias, path in added:
+            typer.echo(f"  • {alias:25} {path}")
+    except Exception as e:
+        typer.echo(f"[Error] {e}", err=True)
+        raise typer.Exit(1)
+
+
 @cli.command()
 def update(alias: str, path: str):
     """Update an existing log alias to a new path"""
@@ -109,25 +134,59 @@ def update(alias: str, path: str):
 
 
 @cli.command()
-def remove(alias: str):
-    """Remove a tracked log"""
-    try:
-        remove_tracked_log(alias)
-        typer.echo(f"Removed {alias}")
-    except Exception as e:
-        typer.echo(f"[Error] {e}", err=True)
-        raise typer.Exit(1)
+def remove(
+    aliases: list[str] = typer.Argument(None, help="One or more alias names to remove"),
+    project: str = typer.Option(None, "--project", "-p", help="Remove all logs in a project group"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation for project removal")
+):
+    """Remove one or more tracked logs, or an entire project group"""
+    if project:
+        try:
+            count = remove_project(project)
+            typer.echo(f"✅ Removed project '{project}' ({count} logs)")
+        except ValueError as e:
+            typer.echo(f"[Error] {e}", err=True)
+            raise typer.Exit(1)
+    elif aliases:
+        if len(aliases) == 1:
+            try:
+                remove_tracked_log(aliases[0])
+                typer.echo(f"Removed {aliases[0]}")
+            except Exception as e:
+                typer.echo(f"[Error] {e}", err=True)
+                raise typer.Exit(1)
+        else:
+            try:
+                remove_tracked_logs_bulk(aliases)
+                typer.echo(f"✅ Removed {len(aliases)} aliases: {', '.join(aliases)}")
+            except Exception as e:
+                typer.echo(f"[Error] {e}", err=True)
+                raise typer.Exit(1)
+    else:
+        typer.echo("Specify aliases to remove or use --project to remove a project group.")
+        typer.echo("Example: ezlog remove myapp.api myapp.error")
+        typer.echo("         ezlog remove --project myapp")
 
 
 @cli.command()
 def list():
-    """List all tracked logs"""
+    """List all tracked logs grouped by project"""
     data = load_tracked_logs()
     if not data:
         typer.echo("No logs tracked")
         return
-    for alias, path in data.items():
-        typer.echo(f"{alias:15} {path}")
+
+    groups = group_logs_by_project(data)
+    for group_key in sorted(groups):
+        items = groups[group_key]
+        if group_key == "_root":
+            # Project-less logs
+            for short, info in items.items():
+                typer.echo(f"{info['alias']:20} {info['path']}")
+        else:
+            typer.echo(f"\n📁 {group_key}:")
+            for short, info in items.items():
+                typer.echo(f"  • {short:20} {info['path']}")
 
 
 @cli.command()
@@ -153,34 +212,57 @@ def check(missing_only: bool = typer.Option(False, "--missing-only", help="Show 
         typer.echo("No logs tracked")
         return
 
+    groups = group_logs_by_project(data)
     missing_count = 0
-    for alias, path in data.items():
-        exists = os.path.isfile(path)
-        if not exists:
-            missing_count += 1
-        if missing_only and exists:
-            continue
+    total = len(data)
 
-        status = "✅" if exists else "❌"
-        typer.echo(f"{status} {alias:15} {path}")
+    for group_key in sorted(groups):
+        items = groups[group_key]
+        if group_key != "_root":
+            typer.echo(f"\n📁 {group_key}:")
 
-    typer.echo(f"\nTotal: {len(data)} | Missing: {missing_count} | Healthy: {len(data) - missing_count}")
+        for short, info in items.items():
+            path = info["path"]
+            alias = info["alias"]
+            exists = os.path.isfile(path)
+            if not exists:
+                missing_count += 1
+            if missing_only and exists:
+                continue
+
+            status = "✅" if exists else "❌"
+            prefix = "  " if group_key != "_root" else ""
+            typer.echo(f"{prefix}{status} {short:20} {path}")
+
+    typer.echo(f"\nTotal: {total} | Missing: {missing_count} | Healthy: {total - missing_count}")
 
 
 @cli.command()
-def prune(yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt")):
+def prune(
+    project: str = typer.Option(None, "--project", "-p", help="Scope to a specific project"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt")
+):
     """Remove tracked aliases whose files no longer exist"""
     data = load_tracked_logs()
     if not data:
         typer.echo("No logs tracked")
         return
 
-    missing_aliases = [alias for alias, path in data.items() if not os.path.isfile(path)]
+    if project:
+        missing_aliases = [
+            alias for alias, path in data.items()
+            if parse_alias(alias)[0] == project and not os.path.isfile(path)
+        ]
+        scope_msg = f" in project '{project}'"
+    else:
+        missing_aliases = [alias for alias, path in data.items() if not os.path.isfile(path)]
+        scope_msg = ""
+
     if not missing_aliases:
-        typer.echo("No missing log paths found")
+        typer.echo(f"No missing log paths found{scope_msg}")
         return
 
-    typer.echo("Missing aliases:")
+    typer.echo(f"Missing aliases{scope_msg}:")
     for alias in missing_aliases:
         typer.echo(f"- {alias}")
 
@@ -191,7 +273,7 @@ def prune(yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation
         del data[alias]
 
     save_tracked_logs(data)
-    typer.echo(f"✅ Removed {len(missing_aliases)} missing aliases")
+    typer.echo(f"✅ Removed {len(missing_aliases)} missing aliases{scope_msg}")
 
 
 @cli.command()

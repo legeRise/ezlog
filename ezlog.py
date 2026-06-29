@@ -94,11 +94,13 @@ def get_resource_path(relative_path):
 
 # --- Load your logs logic ---
 try:
-    from tracked_logs import load_tracked_logs
+    from tracked_logs import load_tracked_logs, group_logs_by_project
 except ImportError:
     # Dummy data for testing
     def load_tracked_logs():
         return {f"Project {i}": "test.log" for i in range(1, 50)}
+    def group_logs_by_project(data):
+        return {"_root": {k: {"alias": k, "path": v} for k, v in data.items()}}
 
 app = FastAPI()
 
@@ -109,9 +111,12 @@ templates = Jinja2Templates(directory=get_resource_path("templates"))
 @app.get("/", response_class=HTMLResponse)
 async def get_home(request: Request):
     """Serves the UI shell."""
+    logs = load_tracked_logs()
+    groups = group_logs_by_project(logs)
     return templates.TemplateResponse("index.html", {
         "request": request, 
-        "aliases_json": json.dumps(load_tracked_logs()),
+        "aliases_json": json.dumps(logs),
+        "groups_json": json.dumps(groups),
         "initial_alias": ""
     })
 
@@ -120,10 +125,12 @@ async def get_home(request: Request):
 async def get_log_page(request: Request, alias: str):
     """Serves the UI shell with an initial alias from route"""
     logs = load_tracked_logs()
+    groups = group_logs_by_project(logs)
     initial_alias = alias if alias in logs else ""
     return templates.TemplateResponse("index.html", {
         "request": request,
         "aliases_json": json.dumps(logs),
+        "groups_json": json.dumps(groups),
         "initial_alias": initial_alias
     })
 
