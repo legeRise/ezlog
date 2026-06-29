@@ -454,9 +454,7 @@ def upgrade(
                     pass
                 PID_FILE.unlink(missing_ok=True)
 
-        install_script = package_dir / "install.sh"
-        install_cmd = ["bash", str(install_script)] if os.geteuid() == 0 else ["sudo", "bash", str(install_script)]
-
+        # Direct install — no need to delegate to install.sh
         typer.echo("🧩 Installing new release...")
         try:
             subprocess.run(install_cmd, check=True)

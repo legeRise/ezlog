@@ -81,7 +81,7 @@ ezlog start
 
 ### Step 7: Upgrade later (easy)
 
-When a new release is available, just run:
+When a new release is available (v1.1.0+), just run:
 
 ```bash
 ezlog upgrade
@@ -93,6 +93,14 @@ What it does:
 - Skips install if already up-to-date
 - Stops running ezlog (if running), installs new release, restarts it
 - Reuses last host/port automatically on restart
+
+**On v1.0.5 (pre-upgrade command)?** Use this one-liner:
+
+```bash
+sudo curl -L https://github.com/legeRise/ezlog/releases/latest/download/ezlog-linux-x64.tar.gz | sudo tar -xz -C /tmp && sudo /tmp/ezlog-linux-x64/install.sh && sudo rm -rf /tmp/ezlog-linux-x64
+```
+
+Or just reinstall from scratch following [Steps 1-5](#-quick-start-for-users).
 
 ![EZLog Dashboard](docs/images/dashboard.png)
 *Screenshot: Main view showing log list in sidebar*

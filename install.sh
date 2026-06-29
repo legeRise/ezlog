@@ -10,17 +10,24 @@ fi
 INSTALL_DIR="/usr/local/ezlog"
 BIN_LINK="/usr/local/bin/ezlog"
 
+# Get the directory where the script resides (resolves symlinks)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 echo "📦 Installing ezlog..."
+echo "  Script dir: $SCRIPT_DIR"
 
 # Check if binary exists (handle both packaged and source directory)
-if [ -f "ezlog" ]; then
-    # Running from extracted package (binary is here)
-    SOURCE_DIR="."
-elif [ -f "dist/ezlog/ezlog" ]; then
+if [ -f "$SCRIPT_DIR/ezlog" ]; then
+    # Running from extracted package (binary is next to install.sh)
+    SOURCE_DIR="$SCRIPT_DIR"
+elif [ -f "$SCRIPT_DIR/dist/ezlog/ezlog" ]; then
     # Running from source directory (binary is in dist/)
-    SOURCE_DIR="dist/ezlog"
+    SOURCE_DIR="$SCRIPT_DIR/dist/ezlog"
 else
     echo "❌ Binary not found!"
+    echo "Looked in:"
+    echo "  - $SCRIPT_DIR/ezlog"
+    echo "  - $SCRIPT_DIR/dist/ezlog/ezlog"
     echo "If building from source, run ./build.sh first."
     exit 1
 fi
@@ -35,7 +42,7 @@ if [ -L "$BIN_LINK" ]; then
     rm -f "$BIN_LINK"
 fi
 
-# Copy binary to installation directory
+# Copy binary and assets to installation directory
 echo "📁 Copying files to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 cp -r "$SOURCE_DIR"/* "$INSTALL_DIR/"
