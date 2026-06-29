@@ -457,10 +457,32 @@ def upgrade(
         # Direct install — no need to delegate to install.sh
         typer.echo("🧩 Installing new release...")
         try:
-            subprocess.run(install_cmd, check=True)
-        except subprocess.CalledProcessError as e:
-            typer.echo(f"[Error] Installation failed: {e}", err=True)
-            raise typer.Exit(1)
+            # Ensure target directories exist
+            SYSTEM_BINARY.parent.mkdir(parents=True, exist_ok=True)
+
+            # Copy the new binary
+            import shutil
+            shutil.copy2(str(new_binary), str(SYSTEM_BINARY))
+            SYSTEM_BINARY.chmod(0o755)
+
+            # Ensure symlink exists
+            if not SYSTEM_LINK.exists():
+                SYSTEM_LINK.parent.mkdir(parents=True, exist_ok=True)
+                SYSTEM_LINK.symlink_to(str(SYSTEM_BINARY))
+        except Exception as e:
+            # If direct copy fails (e.g. permissions), fall back to install.sh
+            install_script = package_dir / "install.sh"
+            if install_script.exists():
+                typer.echo("  Direct copy failed, falling back to install.sh...")
+                install_cmd = ["bash", str(install_script)] if os.geteuid() == 0 else ["sudo", "bash", str(install_script)]
+                try:
+                    subprocess.run(install_cmd, check=True)
+                except subprocess.CalledProcessError as e2:
+                    typer.echo(f"[Error] Installation failed: {e2}", err=True)
+                    raise typer.Exit(1)
+            else:
+                typer.echo(f"[Error] Failed to install: {e}", err=True)
+                raise typer.Exit(1)
 
         updated_hash = sha256_file(SYSTEM_BINARY)
         if updated_hash:
