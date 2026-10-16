@@ -3,4 +3,3 @@ uvicorn       # ASGI server for FastAPI
 websockets    # WebSocket library for uvicorn
 typer         # CLI commands and argument parsing
 jinja2        # Templating engine for HTML rendering
-aiofiles     # Asynchronous file operations

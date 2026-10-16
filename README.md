@@ -4,23 +4,24 @@ A standalone, web-based log viewer with real-time streaming.
 
 ## Features
 
-- 📊 Real-time log streaming via WebSockets
+- 📊 Real-time log streaming over WebSockets
+- 🔁 Rotation-safe tailing — keeps streaming across `logrotate` (rename/create and copytruncate)
+- 🔌 Auto-reconnect with an always-on status chip (Live / History / Search / Reconnecting)
 - 📁 Track multiple logs with simple aliases
-- 🗂️ **Project grouping** - group related logs under collapsible project sections
-- 📂 **Folder import** - add all `.log` files from a folder as a project (`ezlog add-folder`)
-- 🌐 Web interface for easy viewing
-- 🚀 Standalone binary - no Python installation needed
-- ⚡ Fast loading - shows last 500 lines instantly
-- 🔄 Infinite scroll - loads history as you scroll up
-- 🎯 Navigation buttons - jump to top/bottom quickly
-- ⏸️ Pause/Resume - buffer logs while you read
-- 🔍 Real-time filtering
-- 🔎 Full-file search (press Enter in filter box)
-- 🎨 Multiple themes (Dark, Light, Solarized)
+- 🗂️ **Project grouping** — collapsible sections for related logs
+- 📂 **Folder import** — add a whole folder as a project (`ezlog add-folder`)
+- ⚡ Instant last 500 lines, with byte-offset history as you scroll up
+- 🧭 **Virtualized viewer** — stays smooth on 100k+ line files
+- 🔢 Line-number gutter, wrap toggle, and level-tinted rows
+- 🎚️ Level filters (ALL / ERR / WARN / INFO) plus live text filtering
+- 🔎 Full-file search with match highlighting and `n`/`N` navigation (press Enter in the filter box)
+- ✂️ Click a line to copy it; Shift-click to select a range and copy or download it
+- ⌨️ Keyboard-first: `/` search · `g`/`G` top/bottom · `p` pause · `n`/`N` matches · `L` line numbers · `W` wrap · `c` copy · `j`/`k` scroll
+- 🎨 Multiple themes (Dark, Light, Solarized) with no theme flash
+- 📦 Offline UI — all assets are bundled locally, no CDN
 - 📱 Mobile responsive
-- 🔧 Simple CLI for log management
+- 🚀 Standalone binary — no Python needed at runtime
 - 🔗 Route-based log tabs (`/logs/<alias>`)
-- ✂️ Bulk remove (`ezlog remove alias1 alias2 alias3`)
 - ⬆️ One-command self-upgrade (`ezlog upgrade`)
 
 ---
@@ -141,50 +142,41 @@ Use HTTPS at the proxy when exposing EZLog beyond a trusted local network.
    cd ezlog
    ```
 
-2. **(Optional)** Bump the version number in `cli.py`:
-   ```bash
-   # Edit cli.py and change:
-   EZLOG_VERSION = "1.0.5"   →   EZLOG_VERSION = "1.1.0"
+2. **(Optional)** Bump the version. There is a single source of truth in `version.py`:
+   ```python
+   # version.py
+   __version__ = "2.0.0"
    ```
 
-3. Build the binary:
+3. Build the standalone binary:
    ```bash
    chmod +x build.sh
    ./build.sh
    ```
-   This creates `dist/ezlog/` with the standalone binary.
+   This compiles a fresh binary with PyInstaller into `dist/ezlog/`.
 
 4. Package for distribution:
    ```bash
    chmod +x package.sh
    ./package.sh
    ```
-   This creates `ezlog-linux-x64.tar.gz` — ready for GitHub Releases or sharing.
+   This does **not** recompile — it packages `dist/ezlog/` into
+   `ezlog-linux-x64.tar.gz`, ready for GitHub Releases or direct sharing.
 
-   **Build workflow summary:**
-   ```
-   Bump version in cli.py → ./build.sh → ./package.sh
-   ```
-
-   Notes:
-   - `build.sh` compiles a fresh binary using PyInstaller.
-   - `package.sh` does **not** compile; it only packages `dist/ezlog` into a tarball.
-   - Always bump the version **before** building so the binary reports the correct version.
-
-3. Install system-wide:
+5. Install system-wide:
    ```bash
    sudo ./install.sh
    ```
-   This installs the binary to `/usr/local/ezlog/` and creates a symlink at `/usr/local/bin/ezlog`.
+   This installs the binary to `/usr/local/ezlog/` and symlinks `/usr/local/bin/ezlog`.
 
-4. Create distribution tarball:
-
-   ```bash
-   chmod +x package.sh
-   ./package.sh
+   **Build workflow summary:**
+   ```
+   Bump version in version.py → ./build.sh → ./package.sh → (optional) sudo ./install.sh
    ```
 
-   This creates `ezlog-linux-x64.tar.gz` for GitHub Releases or direct sharing.
+   Note: the UI stylesheet is prebuilt into `static/tailwind.css`. If you add or
+   change Tailwind classes in `templates/index.html` or `static/app.js`, rebuild
+   it with `./build-css.sh` (needs Node) and commit the output.
 
 ---
 
@@ -211,7 +203,6 @@ An **alias** is a short nickname you give to a log file. Instead of typing the f
 ```bash
 # Syntax: ezlog add <alias> <full-path-to-log-file>
 
-```bash
 ezlog add nginx /var/log/nginx/access.log
 ezlog add myapp /home/user/myapp/logs/app.log
 ezlog add api /opt/api-server/logs/api.log
@@ -272,6 +263,22 @@ You'll see a web interface with all your tracked logs listed. Click any alias (n
 Tip: type in the filter box to filter currently loaded lines. Press **Enter** to search the entire file and show global matches.
 
 Each selected log updates the URL to `/logs/<alias>`, so you can open different aliases in different tabs and share direct links.
+
+#### Keyboard shortcuts
+
+| Key | Action |
+| --- | --- |
+| `/` | Focus the filter box |
+| `Enter` (in filter) | Search the whole file |
+| `Esc` | Clear the filter / search and return to live |
+| `g` / `G` | Jump to top / bottom (live) |
+| `j` / `k` | Scroll down / up one line |
+| `p` | Pause / resume live updates |
+| `n` / `N` | Next / previous search match |
+| `L` | Toggle line numbers |
+| `W` | Toggle line wrapping |
+| `c` | Copy the active line or selection |
+| Click / Shift-click | Copy one line / select a range to copy or download |
 
 ![Log Viewer](docs/images/bottom.png)
 *Screenshot: Log file selected and displaying live logs*
@@ -407,9 +414,21 @@ rm -rf ~/.ezlog  # Optional: removes tracked log config
 Run in development mode:
 
 ```bash
-pip install -r requirements.txt
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements-dev.txt
 python cli.py run --port 9200
 ```
+
+Run the tests:
+
+```bash
+python -m pytest tests -q
+```
+
+The suite covers the tailer (rotation and truncation), the HTTP + WebSocket
+contract, and the tracked-logs store. CI (`.github/workflows/ci.yml`) runs the
+tests, then builds the standalone binary and smoke-tests the CLI.
 
 ## License
 
