@@ -144,19 +144,19 @@
                     <button data-level="INFO" class="lvl px-2 py-1.5 text-gray-400 hover:bg-gray-700 border-l border-gray-600">INFO</button>
                 </div>
 
-                <input type="text" id="logFilter" placeholder="Filter (Enter=search file)"
+                <input type="text" id="logFilter" placeholder="Filter · Enter = search file"
                     class="bg-gray-900 border border-gray-600 text-sm rounded-md px-2 py-1.5 w-24 focus:w-44 md:w-44 transition-all focus:outline-none focus:border-blue-500">
 
-                <button id="lineNumBtn" class="hidden md:inline text-gray-400 hover:text-white text-sm px-2 py-1 border border-gray-600 rounded" title="Toggle line numbers">#</button>
-                <button id="wrapBtn" class="hidden md:inline text-gray-400 hover:text-white text-sm px-2 py-1 border border-gray-600 rounded" title="Toggle line wrapping">↵</button>
+                <button id="lineNumBtn" class="hidden md:inline text-gray-400 hover:text-white text-sm px-2 py-1 border border-gray-600 rounded" title="Toggle line numbers (L)">#</button>
+                <button id="wrapBtn" class="hidden md:inline text-gray-400 hover:text-white text-sm px-2 py-1 border border-gray-600 rounded" title="Toggle line wrapping (W)">↵</button>
 
-                <button id="pauseBtn" class="flex items-center space-x-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors border border-gray-600" title="Pause / resume live updates">
+                <button id="pauseBtn" class="flex items-center space-x-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors border border-gray-600" title="Pause / resume live updates (p)">
                     <span id="pauseIcon">⏸</span>
                     <span id="pendingCount" class="bg-blue-500 text-white text-[10px] px-1.5 rounded-full hidden">0</span>
                 </button>
 
-                <button id="goTopBtn" class="hidden text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded text-sm hover:bg-gray-700" title="Go to top">⬆</button>
-                <button id="goBottomBtn" class="hidden text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded text-sm hover:bg-gray-700" title="Go to bottom / live">⬇</button>
+                <button id="goTopBtn" class="hidden text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded text-sm hover:bg-gray-700" title="Go to top (g)">⬆</button>
+                <button id="goBottomBtn" class="hidden text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded text-sm hover:bg-gray-700" title="Go to bottom / live (G)">⬇</button>
 
                 <button id="themeBtn" class="text-gray-400 hover:text-white text-lg px-1.5" title="Switch theme">🎨</button>
                 <button id="downloadBtn" class="hidden md:inline text-gray-400 hover:text-white text-sm px-1.5" title="Download log">⬇️</button>
@@ -187,7 +187,14 @@
                 Loading…
             </div>
 
-            <div id="toast" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-800 border border-gray-600 text-gray-200 text-xs px-3 py-1.5 rounded-full shadow-lg z-20 max-w-[90%] truncate"></div>
+            <div id="toast" class="hidden absolute bottom-4 left-4 bg-gray-800 border border-gray-600 text-gray-200 text-xs px-3 py-1.5 rounded-full shadow-lg z-20 max-w-[70%] truncate"></div>
+
+            <div id="selBar" class="hidden absolute bottom-4 right-4 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-20 flex items-center gap-2 px-3 py-1.5 text-xs">
+                <span id="selCount" class="text-gray-300 font-medium"></span>
+                <button id="selCopy" class="px-2 py-0.5 bg-gray-700 hover:bg-gray-600 rounded transition-colors" title="Copy selected lines (c)">Copy</button>
+                <button id="selDownload" class="px-2 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors" title="Download selected lines">Download</button>
+                <button id="selClear" class="px-1 text-gray-400 hover:text-white" title="Clear selection (Esc)">✕</button>
+            </div>
 
             <button id="jumpLatest" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg z-20">
                 ↓ Jump to latest

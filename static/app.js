@@ -30,6 +30,27 @@ function levelClass(level) {
     }
 }
 
+// Fill `el` with `text`, wrapping case-insensitive occurrences of `query` in
+// <mark>. Built from text nodes only, so log content can never inject markup.
+function markMatches(el, text, query) {
+    if (!query) { el.textContent = text; return; }
+    const lower = text.toLowerCase();
+    const q = query.toLowerCase();
+    const frag = document.createDocumentFragment();
+    let i = 0;
+    let pos;
+    while ((pos = lower.indexOf(q, i)) !== -1) {
+        if (pos > i) frag.appendChild(document.createTextNode(text.slice(i, pos)));
+        const mark = document.createElement('mark');
+        mark.className = 'bg-yellow-500/40 text-inherit rounded-sm px-0.5';
+        mark.textContent = text.slice(pos, pos + q.length);
+        frag.appendChild(mark);
+        i = pos + q.length;
+    }
+    if (i < text.length) frag.appendChild(document.createTextNode(text.slice(i)));
+    el.replaceChildren(frag);
+}
+
 class LogViewer {
     constructor(aliases, groups) {
         this.aliases = aliases;
@@ -67,6 +88,11 @@ class LogViewer {
         this.highlightLine = 0;
         this.searchResults = [];
         this.lastSearchQuery = '';
+        this.highlightQuery = '';
+        this.activeLine = 0;      // anchor line for copy / range selection
+        this.selStart = 0;        // inclusive range (0 = no range)
+        this.selEnd = 0;
+        this.matchIndex = -1;     // index into this.view of the current match
 
         // Loading guards
         this.loadingOlder = false;
@@ -101,6 +127,11 @@ class LogViewer {
             levelChips: document.getElementById('levelChips'),
             lineNumBtn: document.getElementById('lineNumBtn'),
             wrapBtn: document.getElementById('wrapBtn'),
+            selBar: document.getElementById('selBar'),
+            selCount: document.getElementById('selCount'),
+            selCopy: document.getElementById('selCopy'),
+            selDownload: document.getElementById('selDownload'),
+            selClear: document.getElementById('selClear'),
         };
 
         this.init();
@@ -157,6 +188,13 @@ class LogViewer {
         this.dom.scroll.addEventListener('scroll', () => this.onScroll(), { passive: true });
         window.addEventListener('resize', () => this.scheduleRender());
 
+        // Selection bar (copy / download a line range)
+        this.dom.selCopy.addEventListener('click', () => this.copySelection());
+        this.dom.selDownload.addEventListener('click', () => this.downloadCurrentLog());
+        this.dom.selClear.addEventListener('click', () => this.clearSelection());
+
+        document.addEventListener('keydown', (e) => this.onKeydown(e));
+
         window.addEventListener('popstate', () => {
             const alias = this.getAliasFromPath();
             if (alias && this.aliases[alias]) this.connect(alias, { updateRoute: false });
@@ -166,9 +204,12 @@ class LogViewer {
         this.updateToggleButtons();
         this.setConn('idle', '');
 
-        const initialAlias = (window.INITIAL_ALIAS && this.aliases[window.INITIAL_ALIAS])
-            ? window.INITIAL_ALIAS
-            : this.getAliasFromPath();
+        const savedAlias = (() => {
+            try { return localStorage.getItem('ezlog-last') || ''; } catch (e) { return ''; }
+        })();
+        const initialAlias =
+            (window.INITIAL_ALIAS && this.aliases[window.INITIAL_ALIAS]) ? window.INITIAL_ALIAS
+            : this.getAliasFromPath() || (this.aliases[savedAlias] ? savedAlias : '');
         if (initialAlias && this.aliases[initialAlias]) this.connect(initialAlias, { updateRoute: false });
     }
 
@@ -314,6 +355,14 @@ class LogViewer {
         this.searchResults = [];
         this.following = true;
         this.loadingOlder = false;
+        this.highlightQuery = '';
+        this.activeLine = 0;
+        this.selStart = 0;
+        this.selEnd = 0;
+        this.matchIndex = -1;
+        if (this.dom.selBar) this.dom.selBar.classList.add('hidden');
+
+        try { localStorage.setItem('ezlog-last', alias); } catch (e) { /* ignore */ }
 
         this.updatePauseButton();
         this.updatePendingBadge();
@@ -582,6 +631,7 @@ class LogViewer {
         d.className = this.wrap
             ? 'wrapped-row px-3 py-0.5 hover:bg-gray-800'
             : 'log-row nowrap-row flex px-3 hover:bg-gray-800';
+        d.dataset.line = String(row.n);
 
         if (this.showNumbers) {
             const n = document.createElement('span');
@@ -594,16 +644,24 @@ class LogViewer {
 
         const t = document.createElement('span');
         t.className = levelClass(row.lvl);
-        t.textContent = row.text;
+        if (this.highlightQuery) markMatches(t, row.text, this.highlightQuery);
+        else t.textContent = row.text;
         d.appendChild(t);
 
-        if (this.highlightLine && row.n === this.highlightLine) {
-            d.classList.add('bg-blue-900/40');
+        // Row state: search target, active anchor, selection range.
+        if (this.highlightLine && row.n === this.highlightLine) d.classList.add('bg-blue-900/40');
+        if (this.selEnd > this.selStart && row.n >= this.selStart && row.n <= this.selEnd) {
+            d.classList.add('bg-blue-900/30');
         }
+        if (row.n === this.activeLine) d.classList.add('bg-blue-900/50');
+
         if (row.isSearch) {
             d.classList.add('cursor-pointer');
             d.title = `Open context around line ${row.n}`;
             d.onclick = () => this.openSearchContext(row.n);
+        } else {
+            d.title = 'Click to copy · Shift-click to select a range';
+            d.onclick = (e) => this.onRowClick(row.n, e);
         }
         return d;
     }
@@ -707,6 +765,9 @@ class LogViewer {
             this.startLine = data.start_line || 1;
             this.mode = 'history';
             this.highlightLine = 0;
+            this.highlightQuery = '';
+            this.matchIndex = -1;
+            this.clearSelection();
             this.rebuildView();
             this.render();
             this.dom.scroll.scrollTop = 0;
@@ -745,6 +806,9 @@ class LogViewer {
             this.lastSearchQuery = term;
             this.searchResults = data.matches || [];
             this.highlightLine = 0;
+            this.highlightQuery = term;
+            this.matchIndex = -1;
+            this.clearSelection();
 
             if (this.searchResults.length === 0) {
                 this.lines = [];
@@ -782,7 +846,11 @@ class LogViewer {
             this.lines = data.lines.map((text, i) => ({ n: data.start_line + i, text, lvl: detectLevel(text) }));
             this.startLine = data.start_line;
             this.highlightLine = lineNumber;
+            this.highlightQuery = this.lastSearchQuery;
+            this.activeLine = lineNumber;
+            this.clearSelection();
             this.rebuildView();
+            this.matchIndex = this.view.findIndex((r) => r.n === lineNumber);
             this.render();
             this.scrollToLine(lineNumber);
             this.updateFileInfo();
@@ -802,6 +870,145 @@ class LogViewer {
             this.dom.scroll.scrollTop = Math.max(0, idx * ROW_HEIGHT - this.dom.scroll.clientHeight / 2);
             this.scheduleRender();
         });
+    }
+
+    // -- selection / copy ----------------------------------------------
+    onRowClick(lineNumber, e) {
+        if (e.shiftKey && this.activeLine) {
+            this.selStart = Math.min(this.activeLine, lineNumber);
+            this.selEnd = Math.max(this.activeLine, lineNumber);
+        } else {
+            this.activeLine = lineNumber;
+            this.selStart = 0;
+            this.selEnd = 0;
+        }
+        this.updateSelBar();
+        this.scheduleRender();
+    }
+
+    clearSelection() {
+        this.activeLine = 0;
+        this.selStart = 0;
+        this.selEnd = 0;
+        if (this.dom.selBar) this.dom.selBar.classList.add('hidden');
+    }
+
+    updateSelBar() {
+        if (!this.dom.selBar) return;
+        if (this.selEnd > this.selStart) {
+            this.dom.selCount.textContent = `${this.selEnd - this.selStart + 1} lines`;
+            this.dom.selBar.classList.remove('hidden');
+        } else {
+            this.dom.selBar.classList.add('hidden');
+        }
+    }
+
+    selectionText() {
+        if (this.selEnd > this.selStart) {
+            return this.view
+                .filter((r) => r.n >= this.selStart && r.n <= this.selEnd)
+                .map((r) => r.text)
+                .join('\n');
+        }
+        const row = this.view.find((r) => r.n === this.activeLine);
+        return row ? row.text : '';
+    }
+
+    copySelection() {
+        const text = this.selectionText();
+        if (!text) { this.toast('Nothing selected'); return; }
+        const label = this.selEnd > this.selStart
+            ? `Copied ${this.selEnd - this.selStart + 1} lines`
+            : `Copied line ${this.activeLine}`;
+        this.copyText(text).then(() => this.toast(label)).catch(() => this.toast('Copy failed'));
+    }
+
+    async copyText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(text);
+        }
+        // Fallback for plain-HTTP origins where the async clipboard is unavailable.
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        ta.remove();
+        if (!ok) throw new Error('copy failed');
+    }
+
+    // -- match navigation ----------------------------------------------
+    jumpToMatch(dir) {
+        const q = (this.lastSearchQuery || '').toLowerCase();
+        if (!q) { this.toast('Search first (press / or Enter in the filter)'); return; }
+        if (!this.view.length) { this.toast('No matches'); return; }
+
+        if (this.mode === 'search') {
+            const n = this.view.length;
+            this.matchIndex = this.matchIndex < 0 ? 0 : (this.matchIndex + dir + n) % n;
+            this.activeLine = this.view[this.matchIndex].n;
+            this.highlightQuery = this.lastSearchQuery;
+            this.scrollToLine(this.activeLine);
+            this.scheduleRender();
+            this.toast(`Match ${this.matchIndex + 1}/${n}`);
+            return;
+        }
+
+        const idxs = [];
+        this.view.forEach((r, i) => { if (r.text.toLowerCase().includes(q)) idxs.push(i); });
+        if (!idxs.length) { this.toast('No matches in the loaded lines'); return; }
+        let pos = idxs.indexOf(this.matchIndex);
+        pos = pos === -1 ? (dir > 0 ? 0 : idxs.length - 1) : (pos + dir + idxs.length) % idxs.length;
+        this.matchIndex = idxs[pos];
+        this.activeLine = this.view[this.matchIndex].n;
+        this.highlightQuery = this.lastSearchQuery;
+        this.scrollToLine(this.activeLine);
+        this.scheduleRender();
+        this.toast(`Match ${pos + 1}/${idxs.length}`);
+    }
+
+    clearSearchState() {
+        this.highlightQuery = '';
+        this.matchIndex = -1;
+        this.lastSearchQuery = '';
+        this.setFilterText('');
+        this.dom.filterInput.value = '';
+        if (this.mode === 'search') this.goToBottom();
+        this.scheduleRender();
+    }
+
+    // -- keyboard -------------------------------------------------------
+    onKeydown(e) {
+        const tag = (e.target && e.target.tagName ? e.target.tagName : '').toLowerCase();
+        const typing = tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable);
+
+        if (e.key === '/') {
+            e.preventDefault();
+            this.dom.filterInput.focus();
+            this.dom.filterInput.select();
+            return;
+        }
+        if (e.key === 'Escape') {
+            if (typing) this.dom.filterInput.blur();
+            this.clearSearchState();
+            return;
+        }
+        if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+
+        switch (e.key) {
+            case 'g': this.goToTop(); break;
+            case 'G': this.goToBottom(); break;
+            case 'p': this.togglePause(); break;
+            case 'n': this.jumpToMatch(1); break;
+            case 'N': this.jumpToMatch(-1); break;
+            case 'L': this.setShowNumbers(!this.showNumbers); break;
+            case 'W': this.setWrap(!this.wrap); break;
+            case 'c': this.copySelection(); break;
+            case 'j': this.dom.scroll.scrollTop += ROW_HEIGHT; break;
+            case 'k': this.dom.scroll.scrollTop -= ROW_HEIGHT; break;
+        }
     }
 
     // -- pause ----------------------------------------------------------
@@ -902,8 +1109,13 @@ class LogViewer {
 
     downloadCurrentLog() {
         if (!this.currentAlias) { this.toast('Select a log first'); return; }
+        let url = `/api/logs/${encodeURIComponent(this.currentAlias)}/download`;
+        if (this.selEnd > this.selStart) {
+            url += `?start=${this.selStart}&end=${this.selEnd}`;
+            this.toast(`Downloading lines ${this.selStart}–${this.selEnd}`);
+        }
         const a = document.createElement('a');
-        a.href = `/api/logs/${encodeURIComponent(this.currentAlias)}/download`;
+        a.href = url;
         a.style.display = 'none';
         document.body.appendChild(a);
         a.click();

@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, Response
 
 from version import __version__ as EZLOG_VERSION
 from tailer import LogFile, TailHub
@@ -170,8 +170,8 @@ async def search_log(alias: str, q: str, limit: int = 200):
 
 
 @app.get("/api/logs/{alias}/download")
-async def download_log(alias: str):
-    """Download the full monitored log file for the given alias."""
+async def download_log(alias: str, start: int = 0, end: int = 0):
+    """Download the full monitored log, or a 1-indexed inclusive line range."""
     logs = load_tracked_logs()
 
     if alias not in logs:
@@ -183,7 +183,29 @@ async def download_log(alias: str):
         return {"error": "Log file not found"}
 
     filename = Path(filepath).name or f"{alias}.log"
-    return FileResponse(filepath, filename=filename, media_type="text/plain")
+
+    # No range requested: stream the file as-is (unchanged behavior).
+    if start <= 0 and end <= 0:
+        return FileResponse(filepath, filename=filename, media_type="text/plain")
+
+    lf = get_log_file(filepath)
+    total = await asyncio.to_thread(lambda: lf.metadata()["lines"])
+    start = max(1, start or 1)
+    end = min(total, end or total)
+    if end < start:
+        return {"error": "Empty range"}
+
+    # Cap a single ranged read so one request cannot load an unbounded slice.
+    end = min(end, start + 50000 - 1)
+    lines = await asyncio.to_thread(lf.read_range, start, end - start + 1)
+    body = "".join(f"{line}\n" for line in lines)
+    stem = Path(filepath).stem or alias
+    ranged_name = f"{stem}_L{start}-{end}.log"
+    return Response(
+        content=body,
+        media_type="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="{ranged_name}"'},
+    )
 
 
 @app.websocket("/ws/{alias}")

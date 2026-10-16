@@ -49,6 +49,16 @@ def test_download(client):
     assert "started" in r.text
 
 
+def test_download_range(client):
+    r = client.get("/api/logs/app/download", params={"start": 2, "end": 3})
+    assert r.status_code == 200
+    assert r.text.splitlines() == [
+        "2026-01-01 10:00:01 WARN  slow query",
+        "2026-01-01 10:00:02 ERROR boom",
+    ]
+    assert "app_L2-3.log" in r.headers.get("content-disposition", "")
+
+
 def test_websocket_metadata_history_and_live(client, sample_log):
     with client.websocket_connect("/ws/app") as ws:
         meta = ws.receive_json()
