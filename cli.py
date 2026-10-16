@@ -16,9 +16,9 @@ from tracked_logs import (
     add_folder, group_logs_by_project, parse_alias,
     TRACKED_LOGS_FILE, APP_DIR
 )
+from version import __version__ as EZLOG_VERSION
 
 cli = typer.Typer()
-EZLOG_VERSION = "1.1.0"
 
 # PID file for background process
 PID_FILE = APP_DIR / "ezlog.pid"

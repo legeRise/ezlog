@@ -2,32 +2,19 @@
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <!-- Updated viewport for better mobile scaling -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EZLog Pro</title>
-    <!-- Load Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EZLog</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <!-- Apply the saved theme before first paint so there is no flash -->
     <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        gray: { 900: '#1e1e1e', 800: '#252526', 700: '#333333', 
-                                600: '#3e3e42', 500: '#505050' },
-                        blue: { 500: '#007acc' },
-                        // Solarized colors
-                        solarized: {
-                            base03: '#002b36', base02: '#073642', base01: '#586e75', base00: '#657b83',
-                            base0: '#839496', base1: '#93a1a1', base2: '#eee8d5', base3: '#fdf6e3',
-                            yellow: '#b58900', orange: '#cb4b16', red: '#dc322f', magenta: '#d33682',
-                            violet: '#6c71c4', blue: '#268bd2', cyan: '#2aa198', green: '#859900'
-                        }
-                    }
-                }
-            }
-        }
+        (function () {
+            try {
+                document.documentElement.className = localStorage.getItem('ezlog-theme') || 'dark';
+            } catch (e) { /* localStorage unavailable */ }
+        })();
     </script>
+    <!-- Local, prebuilt Tailwind (offline; no CDN) -->
+    <link rel="stylesheet" href="/static/tailwind.css">
     <style>
         /* Mobile: Hide scrollbars for cleaner look */
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -94,7 +81,7 @@
     <aside id="sidebar" class="fixed inset-y-0 left-0 w-72 bg-gray-800 border-r border-gray-600 transform -translate-x-full transition-transform duration-300 ease-in-out z-50 md:relative md:translate-x-0 flex flex-col shadow-2xl md:shadow-none">
         <div class="p-4 border-b border-gray-600 font-bold tracking-wider text-white flex justify-between items-center">
             <span>EZLOG</span>
-            <span class="text-xs font-normal text-gray-500">v2.0</span>
+            <span class="text-xs font-normal text-gray-500">v{{ version }}</span>
             <!-- Close button for mobile -->
             <button id="closeSidebar" class="md:hidden text-gray-400 hover:text-white">✕</button>
         </div>

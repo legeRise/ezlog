@@ -1,0 +1,9 @@
+/* Tailwind input file.
+ *
+ * This is compiled to ../tailwind.css by ./build-css.sh and the *generated*
+ * file is committed, so the app never depends on the Tailwind CDN at runtime
+ * (important on air-gapped / firewalled servers).
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

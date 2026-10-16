@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Development / test dependencies
+pytest
+httpx

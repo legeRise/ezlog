@@ -112,3 +112,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# EZLog local artifacts / scratch
+ezlog-linux-x64.tar.gz
+ezlog-linux-x64/
+myproject1/
+node_modules/

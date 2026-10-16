@@ -9,6 +9,8 @@ from fastapi.responses import HTMLResponse, FileResponse
 import json
 from collections import deque
 
+from version import __version__ as EZLOG_VERSION
+
 
 def get_file_metadata(filepath):
     """Get file size and line count efficiently"""
@@ -117,7 +119,8 @@ async def get_home(request: Request):
         "request": request, 
         "aliases_json": json.dumps(logs),
         "groups_json": json.dumps(groups),
-        "initial_alias": ""
+        "initial_alias": "",
+        "version": EZLOG_VERSION
     })
 
 
@@ -131,7 +134,8 @@ async def get_log_page(request: Request, alias: str):
         "request": request,
         "aliases_json": json.dumps(logs),
         "groups_json": json.dumps(groups),
-        "initial_alias": initial_alias
+        "initial_alias": initial_alias,
+        "version": EZLOG_VERSION
     })
 
 @app.get("/api/logs/{alias}/history")
