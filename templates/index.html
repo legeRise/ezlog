@@ -81,6 +81,8 @@
         .icon-btn.is-on { color: var(--accent); background: var(--accent-soft); }
         .icon-btn.is-warn { color: var(--lv-warn); background: rgba(245,158,11,.16); }
         .icon-btn.hidden { display: none; }
+        /* keeps a slot open without reflowing the toolbar when it appears */
+        .icon-btn.parked { visibility: hidden; }
 
         /* responsive helpers that coexist with runtime .hidden toggling */
         .desk-only { display: none; }
@@ -145,6 +147,8 @@
         .menu-item:hover { background: var(--surface-hover); }
         .menu-item .ico { color: var(--fg-muted); }
         .menu-item.is-on, .menu-item.is-on .ico { color: var(--accent); }
+        .menu-check { margin-left: auto; color: var(--accent); font-weight: 700; opacity: 0; }
+        .menu-item.is-on .menu-check { opacity: 1; }
         .menu-item.danger:hover { background: rgba(239,68,68,.14); color: var(--lv-error); }
         .menu-item.danger:hover .ico { color: var(--lv-error); }
         .menu-sep { height: 1px; background: var(--border); margin: 5px 4px; }
@@ -325,12 +329,7 @@
                 <span id="fileInfo" class="text-[11px] text-gray-500 truncate"></span>
             </div>
 
-            <div id="levelChips" class="seg hidden sm:flex" role="group" aria-label="Filter by level">
-                <button data-level="ALL" class="lvl is-on">All</button>
-                <button data-level="ERROR" class="lvl lvl-error">Err</button>
-                <button data-level="WARN" class="lvl lvl-warn">Warn</button>
-                <button data-level="INFO" class="lvl lvl-info">Info</button>
-            </div>
+            <div id="levelChips" class="seg hidden sm:flex" role="group" aria-label="Filter by level" title="Levels guessed from this file's text"></div>
 
             <label class="search-box w-36 md:w-52 shrink-0" title="Filter loaded lines · press Enter to search the whole file">
                 <svg class="ico"><use href="#i-search"></use></svg>
@@ -338,10 +337,7 @@
             </label>
 
             <span class="tb-sep desk-only"></span>
-
-            <button id="lineNumBtn" class="icon-btn desk-only" title="Toggle line numbers (L)"><svg class="ico"><use href="#i-list"></use></svg></button>
-            <button id="wrapBtn" class="icon-btn desk-only" title="Toggle line wrapping (W)"><svg class="ico"><use href="#i-wrap"></use></svg></button>
-            <button id="goTopBtn" class="icon-btn hidden" title="Go to top (g)"><svg class="ico"><use href="#i-up"></use></svg></button>
+            <button id="goTopBtn" class="icon-btn parked" title="Go to top (g)"><svg class="ico"><use href="#i-up"></use></svg></button>
             <button id="pauseBtn" class="icon-btn" title="Pause / resume live updates (p)">
                 <span id="pauseIcon"><svg class="ico"><use href="#i-pause"></use></svg></span>
                 <span id="pendingCount" class="count-pill hidden">0</span>
@@ -355,7 +351,10 @@
             <div class="menu-wrap">
                 <button id="moreBtn" class="icon-btn" title="More options" aria-haspopup="true" aria-expanded="false"><svg class="ico"><use href="#i-more"></use></svg></button>
                 <div id="moreMenu" class="menu hidden" role="menu">
-                    <button id="notifyBtn" class="menu-item" role="menuitem"><svg class="ico"><use href="#i-bell-off"></use></svg><span id="notifyLabel">Desktop notifications</span></button>
+                    <button id="lineNumBtn" class="menu-item" role="menuitemcheckbox"><svg class="ico"><use href="#i-list"></use></svg><span>Line numbers</span><span class="menu-check">✓</span></button>
+                    <button id="wrapBtn" class="menu-item" role="menuitemcheckbox"><svg class="ico"><use href="#i-wrap"></use></svg><span>Wrap long lines</span><span class="menu-check">✓</span></button>
+                    <div class="menu-sep"></div>
+                    <button id="notifyBtn" class="menu-item" role="menuitem"><svg class="ico"><use href="#i-bell-off"></use></svg><span id="notifyLabel">Notify me about errors</span></button>
                     <button id="themeBtn" class="menu-item" role="menuitem"><svg class="ico"><use href="#i-moon"></use></svg><span id="themeLabel">Theme: Dark</span></button>
                     <div class="menu-sep"></div>
                     <button id="clearBtn" class="menu-item danger" role="menuitem"><svg class="ico"><use href="#i-trash"></use></svg><span>Clear view</span></button>

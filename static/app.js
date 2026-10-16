@@ -135,6 +135,7 @@ class LogViewer {
         this.lastStatus = {};                 // alias -> status record
         this.baseline = {};                   // alias -> { errors, warnings } seen
         this.levelCounts = { ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0, OTHER: 0 };
+        this.seenLevels = new Set();          // levels actually detected in this file
         this.recentErrors = [];               // last few ERROR rows
         this.notifyEnabled = false;
         this.insightsOpen = false;
@@ -215,8 +216,9 @@ class LogViewer {
         this.dom.lineNumBtn.addEventListener('click', () => this.setShowNumbers(!this.showNumbers));
         this.dom.wrapBtn.addEventListener('click', () => this.setWrap(!this.wrap));
 
-        this.dom.levelChips.querySelectorAll('.lvl').forEach((btn) => {
-            btn.addEventListener('click', () => this.setLevel(btn.dataset.level));
+        this.dom.levelChips.addEventListener('click', (e) => {
+            const btn = e.target.closest('.lvl');
+            if (btn) this.setLevel(btn.dataset.level);
         });
 
         this.dom.filterInput.addEventListener('input', (e) => {
@@ -274,6 +276,7 @@ class LogViewer {
         });
 
         this.updateLevelChips();
+        this.renderLevelChips();
         this.updateToggleButtons();
         this.applyNotifyButton();
         this.applyInsights();
@@ -452,6 +455,8 @@ class LogViewer {
         this.newWhileAway = 0;
         this.highlightLine = 0;
         this.levelCounts = { ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0, OTHER: 0 };
+        this.seenLevels = new Set();
+        this.dom.levelChips.style.display = 'none';
         this.recentErrors = [];
         this._insightsSig = '';
         this.searchResults = [];
@@ -1194,7 +1199,7 @@ class LogViewer {
     }
 
     updateNavButtons() {
-        this.dom.goTopBtn.classList.toggle('hidden', this.startLine <= 1 || this.mode === 'search');
+        this.dom.goTopBtn.classList.toggle('parked', this.startLine <= 1 || this.mode === 'search');
     }
 
     showLoading(show) {
@@ -1234,13 +1239,65 @@ class LogViewer {
 
     // -- insights -------------------------------------------------------
     bumpCounts(rows) {
+        let sawNewLevel = false;
         for (const r of rows) {
             this.levelCounts[r.lvl] = (this.levelCounts[r.lvl] || 0) + 1;
+            if (r.lvl !== 'OTHER' && !this.seenLevels.has(r.lvl)) {
+                this.seenLevels.add(r.lvl);
+                sawNewLevel = true;
+            }
             if (r.lvl === 'ERROR') {
                 this.recentErrors.push(r);
                 if (this.recentErrors.length > 50) this.recentErrors.shift();
             }
         }
+        if (sawNewLevel) this.renderLevelChips();
+    }
+
+    // EZLog does not parse the log format — it guesses a level from the text.
+    // So the level filter only offers levels this file has actually shown, and
+    // disappears entirely when the guess finds nothing (or a single level).
+    renderLevelChips() {
+        const defs = [
+            ['ERROR', 'Err', 'lvl-error'],
+            ['WARN', 'Warn', 'lvl-warn'],
+            ['INFO', 'Info', 'lvl-info'],
+            ['DEBUG', 'Debug', 'lvl-debug'],
+        ];
+        const seg = this.dom.levelChips;
+        const present = defs.filter(([lv]) => this.seenLevels.has(lv));
+
+        // Drop a filter that no longer applies to this file's levels.
+        if (this.filterLevel !== 'ALL' && !this.seenLevels.has(this.filterLevel)) {
+            this.filterLevel = 'ALL';
+            this.rebuildView();
+            this.updateFileInfo();
+            this.scheduleRender();
+        }
+
+        if (present.length < 2) {
+            seg.style.display = 'none';
+            if (this.filterLevel !== 'ALL') {
+                this.filterLevel = 'ALL';
+                this.rebuildView();
+                this.updateFileInfo();
+                this.scheduleRender();
+            }
+            return;
+        }
+
+        seg.style.display = '';   // honoured by the responsive `hidden sm:flex`
+        seg.replaceChildren();
+        const mk = (label, level, mod) => {
+            const b = document.createElement('button');
+            b.className = 'lvl' + (mod ? ' ' + mod : '');
+            b.dataset.level = level;
+            b.textContent = label;
+            return b;
+        };
+        seg.appendChild(mk('All', 'ALL', ''));
+        for (const [lv, label, mod] of present) seg.appendChild(mk(label, lv, mod));
+        this.updateLevelChips();
     }
 
     toggleInsights() {
@@ -1253,8 +1310,7 @@ class LogViewer {
 
     applyInsights() {
         this.dom.insights.classList.toggle('hidden', !this.insightsOpen);
-        this.dom.panelBtn.classList.toggle('bg-gray-600', this.insightsOpen);
-        this.dom.panelBtn.classList.toggle('text-white', this.insightsOpen);
+        this.dom.panelBtn.classList.toggle('is-on', this.insightsOpen);
     }
 
     renderInsights() {
