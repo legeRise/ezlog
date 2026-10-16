@@ -87,6 +87,21 @@ def sha256_file(path: Path):
     return digest.hexdigest()
 
 
+def read_binary_version(binary: Path):
+    """Ask a freshly extracted binary which version it reports."""
+    try:
+        result = subprocess.run(
+            [str(binary), "version"],
+            capture_output=True, text=True, timeout=20,
+        )
+    except Exception:
+        return None
+    lines = (result.stdout or "").strip().splitlines()
+    if result.returncode == 0 and lines and lines[0].startswith("ezlog version"):
+        return lines[0].split()[-1]
+    return None
+
+
 def find_extracted_package_dir(root: Path):
     """Find extracted release directory containing install.sh and binary."""
     if (root / "install.sh").exists() and (root / "ezlog").exists():
@@ -506,6 +521,12 @@ def upgrade(
         new_hash = sha256_file(new_binary)
         typer.echo(f"Downloaded SHA256: {new_hash[:16] if new_hash else 'unknown'}...")
 
+        package_version = read_binary_version(new_binary)
+        installed_version = read_binary_version(SYSTEM_BINARY)
+        if package_version:
+            suffix = f" (installed: {installed_version})" if installed_version else ""
+            typer.echo(f"Package version: {package_version}{suffix}")
+
         if current_hash and new_hash and current_hash == new_hash:
             typer.echo("✅ Already up-to-date. Installed binary matches latest package.")
             return
@@ -524,35 +545,24 @@ def upgrade(
                     pass
                 PID_FILE.unlink(missing_ok=True)
 
-        # Direct install — no need to delegate to install.sh
+        # One install path only: install.sh lays down the whole package
+        # (binary + _internal/ + assets). The old "direct copy" replaced just
+        # the executable, which left a stale _internal/ behind — a new binary
+        # running against old libraries and an old UI.
         typer.echo("🧩 Installing new release...")
+        install_script = package_dir / "install.sh"
+        if not install_script.exists():
+            typer.echo("[Error] Invalid package layout: install.sh missing", err=True)
+            raise typer.Exit(1)
+
+        install_cmd = ["bash", str(install_script)]
+        if os.geteuid() != 0:
+            install_cmd = ["sudo"] + install_cmd
         try:
-            # Ensure target directories exist
-            SYSTEM_BINARY.parent.mkdir(parents=True, exist_ok=True)
-
-            # Copy the new binary
-            import shutil
-            shutil.copy2(str(new_binary), str(SYSTEM_BINARY))
-            SYSTEM_BINARY.chmod(0o755)
-
-            # Ensure symlink exists
-            if not SYSTEM_LINK.exists():
-                SYSTEM_LINK.parent.mkdir(parents=True, exist_ok=True)
-                SYSTEM_LINK.symlink_to(str(SYSTEM_BINARY))
-        except Exception as e:
-            # If direct copy fails (e.g. permissions), fall back to install.sh
-            install_script = package_dir / "install.sh"
-            if install_script.exists():
-                typer.echo("  Direct copy failed, falling back to install.sh...")
-                install_cmd = ["bash", str(install_script)] if os.geteuid() == 0 else ["sudo", "bash", str(install_script)]
-                try:
-                    subprocess.run(install_cmd, check=True)
-                except subprocess.CalledProcessError as e2:
-                    typer.echo(f"[Error] Installation failed: {e2}", err=True)
-                    raise typer.Exit(1)
-            else:
-                typer.echo(f"[Error] Failed to install: {e}", err=True)
-                raise typer.Exit(1)
+            subprocess.run(install_cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            typer.echo(f"[Error] Installation failed: {e}", err=True)
+            raise typer.Exit(1)
 
         updated_hash = sha256_file(SYSTEM_BINARY)
         if updated_hash:
