@@ -94,6 +94,19 @@ class LogViewer {
         this.selEnd = 0;
         this.matchIndex = -1;     // index into this.view of the current match
 
+        // Phase 4: tabs, health, notifications, insights
+        this.tabs = [];                       // open aliases
+        this.sidebarItems = {};               // alias -> { dot, badge }
+        this.lastStatus = {};                 // alias -> status record
+        this.baseline = {};                   // alias -> { errors, warnings } seen
+        this.levelCounts = { ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0, OTHER: 0 };
+        this.recentErrors = [];               // last few ERROR rows
+        this.notifyEnabled = false;
+        this.insightsOpen = false;
+        this._insightsSig = '';
+        this._notifyAt = 0;
+        this.statusTimer = null;
+
         // Loading guards
         this.loadingOlder = false;
 
@@ -132,6 +145,10 @@ class LogViewer {
             selCopy: document.getElementById('selCopy'),
             selDownload: document.getElementById('selDownload'),
             selClear: document.getElementById('selClear'),
+            tabBar: document.getElementById('tabBar'),
+            insights: document.getElementById('insights'),
+            panelBtn: document.getElementById('panelBtn'),
+            notifyBtn: document.getElementById('notifyBtn'),
         };
 
         this.init();
@@ -193,6 +210,9 @@ class LogViewer {
         this.dom.selDownload.addEventListener('click', () => this.downloadCurrentLog());
         this.dom.selClear.addEventListener('click', () => this.clearSelection());
 
+        this.dom.panelBtn.addEventListener('click', () => this.toggleInsights());
+        this.dom.notifyBtn.addEventListener('click', () => this.toggleNotify());
+
         document.addEventListener('keydown', (e) => this.onKeydown(e));
 
         window.addEventListener('popstate', () => {
@@ -202,6 +222,10 @@ class LogViewer {
 
         this.updateLevelChips();
         this.updateToggleButtons();
+        this.applyNotifyButton();
+        this.applyInsights();
+        this.renderTabs();
+        this.startStatusPolling();
         this.setConn('idle', '');
 
         const savedAlias = (() => {
@@ -216,6 +240,7 @@ class LogViewer {
     // -- sidebar --------------------------------------------------------
     renderSidebar(filterText) {
         this.dom.projectList.innerHTML = '';
+        this.sidebarItems = {};
         const lower = (filterText || '').toLowerCase();
 
         const groupKeys = Object.keys(this.groups).sort((a, b) => {
@@ -239,6 +264,7 @@ class LogViewer {
                 this.dom.projectList.appendChild(this.createProjectSection(key, items, shortNames, lower));
             }
         }
+        this.applyStatus(this.lastStatus);
     }
 
     groupMatches(items, lower) {
@@ -296,13 +322,30 @@ class LogViewer {
         const btn = document.createElement('button');
         const active = alias === this.currentAlias;
 
-        let cls = 'w-full text-left px-4 py-2 text-sm transition-colors truncate flex items-center gap-2';
+        let cls = 'w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2';
         if (projectName) cls += ' pl-8';
         cls += active
             ? ' bg-gray-700 text-white border-l-2 border-blue-500'
             : ' text-gray-400 hover:bg-gray-700 hover:text-white border-l-2 border-transparent';
         btn.className = cls;
-        btn.innerHTML = `<span class="text-xs text-gray-500">📄</span><span>${this.escape(displayName)}</span>`;
+
+        const dot = document.createElement('span');
+        dot.className = 'health-dot unknown';
+        dot.title = 'Health unknown';
+
+        const icon = document.createElement('span');
+        icon.className = 'text-xs text-gray-500';
+        icon.textContent = '📄';
+
+        const name = document.createElement('span');
+        name.className = 'truncate flex-1';
+        name.textContent = displayName;
+
+        const badge = document.createElement('span');
+        badge.className = 'hl-badge err hidden';
+
+        btn.append(dot, icon, name, badge);
+        this.sidebarItems[alias] = { dot, badge };
 
         btn.onclick = () => {
             this.connect(alias);
@@ -319,6 +362,8 @@ class LogViewer {
         const { updateRoute = true } = options;
         if (this.currentAlias === alias && this.ws && this.ws.readyState === 1) return;
 
+        this.openTab(alias);
+        this.markSeen(alias);
         this.resetView(alias);
 
         if (updateRoute) this.updateRoute(alias);
@@ -352,6 +397,9 @@ class LogViewer {
         this.pendingRows = [];
         this.newWhileAway = 0;
         this.highlightLine = 0;
+        this.levelCounts = { ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0, OTHER: 0 };
+        this.recentErrors = [];
+        this._insightsSig = '';
         this.searchResults = [];
         this.following = true;
         this.loadingOlder = false;
@@ -372,6 +420,8 @@ class LogViewer {
         this.dom.scroll.scrollTop = 0;
         this.render();
         this.renderSidebar(document.getElementById('projectSearch').value);
+        this.renderTabs();
+        this.renderInsights();
         this.showLoading(true);
     }
 
@@ -506,6 +556,9 @@ class LogViewer {
             for (const r of rows) if (this.matches(r)) this.view.push(r);
         }
 
+        this.bumpCounts(rows);
+        if (live) this.maybeNotify(rows);
+
         if (live) {
             this.totalLines += rows.length;
             this.updateFileInfo();
@@ -517,6 +570,7 @@ class LogViewer {
             }
         }
         this.updateNavButtons();
+        this.renderInsights();
     }
 
     prependRows(rows) {
@@ -530,6 +584,8 @@ class LogViewer {
             const matched = rows.filter((r) => this.matches(r));
             if (matched.length) this.view.unshift(...matched);
         }
+        this.bumpCounts(rows);
+        this.renderInsights();
     }
 
     // -- filtering ------------------------------------------------------
@@ -1062,6 +1118,15 @@ class LogViewer {
     loadPrefs() {
         this.showNumbers = localStorage.getItem('ezlog-numbers') !== '0';
         this.wrap = localStorage.getItem('ezlog-wrap') === '1';
+        this.notifyEnabled = localStorage.getItem('ezlog-notify') === '1';
+        this.insightsOpen = localStorage.getItem('ezlog-insights') === '1';
+        try {
+            this.tabs = JSON.parse(localStorage.getItem('ezlog-tabs') || '[]') || [];
+            this.baseline = JSON.parse(localStorage.getItem('ezlog-baseline') || '{}') || {};
+        } catch (e) {
+            this.tabs = [];
+            this.baseline = {};
+        }
     }
 
     // -- chrome ---------------------------------------------------------
@@ -1120,6 +1185,243 @@ class LogViewer {
         document.body.appendChild(a);
         a.click();
         a.remove();
+    }
+
+    // -- insights -------------------------------------------------------
+    bumpCounts(rows) {
+        for (const r of rows) {
+            this.levelCounts[r.lvl] = (this.levelCounts[r.lvl] || 0) + 1;
+            if (r.lvl === 'ERROR') {
+                this.recentErrors.push(r);
+                if (this.recentErrors.length > 50) this.recentErrors.shift();
+            }
+        }
+    }
+
+    toggleInsights() {
+        this.insightsOpen = !this.insightsOpen;
+        localStorage.setItem('ezlog-insights', this.insightsOpen ? '1' : '0');
+        this.applyInsights();
+        this._insightsSig = '';
+        this.renderInsights();
+    }
+
+    applyInsights() {
+        this.dom.insights.classList.toggle('hidden', !this.insightsOpen);
+        this.dom.panelBtn.classList.toggle('bg-gray-600', this.insightsOpen);
+        this.dom.panelBtn.classList.toggle('text-white', this.insightsOpen);
+    }
+
+    renderInsights() {
+        if (!this.insightsOpen) return;
+        const c = this.levelCounts;
+        const total = c.ERROR + c.WARN + c.INFO + c.DEBUG + c.OTHER;
+        const sig = `${this.currentAlias}:${total}:${c.ERROR}:${c.WARN}:${c.INFO}:${c.DEBUG}:${this.recentErrors.length}`;
+        if (sig === this._insightsSig) return;
+        this._insightsSig = sig;
+
+        const pct = (n) => (total ? Math.round((n / total) * 100) : 0);
+        const bar = (label, n, cls) => `
+            <div class="mb-2">
+                <div class="flex justify-between mb-1 text-gray-400">
+                    <span>${label}</span><span class="text-gray-300">${n.toLocaleString()} · ${pct(n)}%</span>
+                </div>
+                <div class="bg-gray-700 rounded"><div class="hist-bar ${cls}" style="width:${pct(n)}%"></div></div>
+            </div>`;
+        const errs = this.recentErrors.slice(-12).reverse();
+        const errList = errs.length
+            ? errs.map((r) => `<button data-line="${r.n}" class="ins-err w-full text-left text-red-400 hover:bg-gray-700 rounded px-1 py-0.5 truncate">${this.escape(r.text)}</button>`).join('')
+            : '<p class="text-gray-500">No errors in the loaded window.</p>';
+
+        this.dom.insights.innerHTML = `
+            <div class="p-3 border-b border-gray-600 flex items-center justify-between">
+                <span class="font-semibold text-white">Insights</span>
+                <span class="text-gray-500">${total.toLocaleString()} loaded</span>
+            </div>
+            <div class="p-3 border-b border-gray-600">
+                ${bar('Errors', c.ERROR, 'bg-red-500')}
+                ${bar('Warnings', c.WARN, 'bg-yellow-500')}
+                ${bar('Info', c.INFO, 'bg-blue-500')}
+                ${bar('Debug', c.DEBUG, 'bg-gray-500')}
+            </div>
+            <div class="p-3">
+                <div class="font-semibold text-white mb-2">Recent errors</div>
+                <div class="space-y-0.5">${errList}</div>
+            </div>`;
+
+        this.dom.insights.querySelectorAll('.ins-err').forEach((b) => {
+            b.addEventListener('click', () => {
+                const n = parseInt(b.dataset.line, 10);
+                this.highlightLine = n;
+                this.activeLine = n;
+                this.scrollToLine(n);
+                this.scheduleRender();
+            });
+        });
+    }
+
+    // -- desktop notifications -----------------------------------------
+    async toggleNotify() {
+        if (!this.notifyEnabled) {
+            if (!('Notification' in window)) { this.toast('Notifications not supported'); return; }
+            let perm = Notification.permission;
+            if (perm === 'default') perm = await Notification.requestPermission();
+            if (perm !== 'granted') { this.toast('Notification permission denied'); return; }
+            this.notifyEnabled = true;
+            this.toast('Desktop notifications on for new errors');
+        } else {
+            this.notifyEnabled = false;
+            this.toast('Desktop notifications off');
+        }
+        localStorage.setItem('ezlog-notify', this.notifyEnabled ? '1' : '0');
+        this.applyNotifyButton();
+    }
+
+    applyNotifyButton() {
+        const on = this.notifyEnabled && 'Notification' in window && window.Notification.permission === 'granted';
+        this.dom.notifyBtn.textContent = on ? '🔔' : '🔕';
+        this.dom.notifyBtn.classList.toggle('text-white', on);
+        this.dom.notifyBtn.classList.toggle('text-gray-500', !on);
+    }
+
+    maybeNotify(rows) {
+        if (!this.notifyEnabled) return;
+        if (!('Notification' in window) || window.Notification.permission !== 'granted') return;
+        const errors = rows.filter((r) => r.lvl === 'ERROR');
+        if (!errors.length) return;
+        const now = Date.now();
+        if (now - this._notifyAt < 3000) return; // throttle bursts
+        this._notifyAt = now;
+        try {
+            const body = errors.length === 1 ? errors[0].text : `${errors.length} error lines`;
+            new window.Notification(`${this.currentAlias}: ${errors.length} new error${errors.length === 1 ? '' : 's'}`, { body, tag: 'ezlog-errors' });
+        } catch (e) { /* notification blocked */ }
+    }
+
+    // -- sidebar health -------------------------------------------------
+    startStatusPolling() {
+        this.refreshStatus();
+        clearInterval(this.statusTimer);
+        this.statusTimer = setInterval(() => this.refreshStatus(), 10000);
+    }
+
+    async refreshStatus() {
+        try {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            if (data && data.logs) {
+                this.lastStatus = data.logs;
+                this.applyStatus(data.logs);
+            }
+        } catch (e) { /* server offline */ }
+    }
+
+    applyStatus(logs) {
+        for (const alias of Object.keys(logs)) {
+            const item = this.sidebarItems[alias];
+            const rec = logs[alias];
+            if (!item) continue;
+
+            item.dot.className = rec.exists ? 'health-dot ok' : 'health-dot missing';
+            item.dot.title = rec.exists ? (rec.size_human || 'OK') : 'File missing';
+
+            const base = this.baseline[alias] || { errors: 0, warnings: 0 };
+            if (!rec.exists) {
+                item.badge.className = 'hl-badge err';
+                item.badge.textContent = '!';
+                item.badge.title = 'File missing';
+            } else if ((rec.errors || 0) > (base.errors || 0)) {
+                item.badge.className = 'hl-badge err';
+                item.badge.textContent = rec.errors > 99 ? '99+' : String(rec.errors);
+                item.badge.title = `${rec.errors} recent errors`;
+            } else if ((rec.warnings || 0) > (base.warnings || 0)) {
+                item.badge.className = 'hl-badge warn';
+                item.badge.textContent = rec.warnings > 99 ? '99+' : String(rec.warnings);
+                item.badge.title = `${rec.warnings} recent warnings`;
+            } else {
+                item.badge.className = 'hl-badge err hidden';
+            }
+        }
+    }
+
+    markSeen(alias) {
+        const rec = this.lastStatus[alias];
+        this.baseline[alias] = {
+            errors: rec ? (rec.errors || 0) : 0,
+            warnings: rec ? (rec.warnings || 0) : 0,
+        };
+        try { localStorage.setItem('ezlog-baseline', JSON.stringify(this.baseline)); } catch (e) { /* ignore */ }
+        const item = this.sidebarItems[alias];
+        if (item) item.badge.className = 'hl-badge err hidden';
+    }
+
+    // -- tabs -----------------------------------------------------------
+    openTab(alias) {
+        if (!this.tabs.includes(alias)) {
+            this.tabs.push(alias);
+            try { localStorage.setItem('ezlog-tabs', JSON.stringify(this.tabs)); } catch (e) { /* ignore */ }
+        }
+        this.renderTabs();
+    }
+
+    closeTab(alias) {
+        const i = this.tabs.indexOf(alias);
+        if (i === -1) return;
+        this.tabs.splice(i, 1);
+        try { localStorage.setItem('ezlog-tabs', JSON.stringify(this.tabs)); } catch (e) { /* ignore */ }
+        if (this.currentAlias === alias) {
+            const next = this.tabs[Math.min(i, this.tabs.length - 1)];
+            if (next) this.connect(next);
+            else this.closeAllTabs();
+        }
+        this.renderTabs();
+    }
+
+    closeAllTabs() {
+        this.wantLive = false;
+        this.intentionalClose = true;
+        if (this.ws) { try { this.ws.close(); } catch (e) { /* ignore */ } this.ws = null; }
+        this.currentAlias = null;
+        this.currentProject = null;
+        this.lines = [];
+        this.view = [];
+        this.levelCounts = { ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0, OTHER: 0 };
+        this.recentErrors = [];
+        this._insightsSig = '';
+        this.dom.title.textContent = 'Select a log';
+        this.dom.fileInfo.textContent = '';
+        this.setConn('idle', '');
+        this.dom.welcome.classList.remove('hidden');
+        this.dom.selBar.classList.add('hidden');
+        this.render();
+        this.renderInsights();
+        this.renderSidebar(document.getElementById('projectSearch').value);
+        this.renderTabs();
+    }
+
+    renderTabs() {
+        const bar = this.dom.tabBar;
+        if (this.tabs.length === 0) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
+        bar.classList.remove('hidden');
+        bar.innerHTML = '';
+        for (const alias of this.tabs) {
+            const isActive = alias === this.currentAlias;
+            const tab = document.createElement('div');
+            tab.className = 'flex items-center shrink-0 border-r border-gray-600 ' +
+                (isActive ? 'bg-gray-900 text-white' : 'text-gray-400 hover:bg-gray-700');
+            const label = document.createElement('button');
+            label.className = 'px-3 py-1.5 truncate max-w-[180px]';
+            label.textContent = alias;
+            label.title = alias;
+            label.onclick = () => this.connect(alias);
+            const close = document.createElement('button');
+            close.className = 'px-2 py-1.5 text-gray-500 hover:text-white';
+            close.textContent = '✕';
+            close.title = 'Close tab';
+            close.onclick = (e) => { e.stopPropagation(); this.closeTab(alias); };
+            tab.append(label, close);
+            bar.appendChild(tab);
+        }
     }
 
     // -- routing --------------------------------------------------------

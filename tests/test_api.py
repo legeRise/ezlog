@@ -59,6 +59,16 @@ def test_download_range(client):
     assert "app_L2-3.log" in r.headers.get("content-disposition", "")
 
 
+def test_status_endpoint(client):
+    data = client.get("/api/status").json()
+    assert "app" in data["logs"]
+    rec = data["logs"]["app"]
+    assert rec["exists"] is True
+    assert rec["errors"] == 1      # the sample log has one ERROR line
+    assert rec["warnings"] == 1    # ... and one WARN line
+    assert "size_human" in rec
+
+
 def test_websocket_metadata_history_and_live(client, sample_log):
     with client.websocket_connect("/ws/app") as ws:
         meta = ws.receive_json()

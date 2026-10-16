@@ -59,6 +59,21 @@
         .conn-connecting { color: #eab308; background: rgba(234,179,8,.14); }
         .conn-offline { color: #ef4444; background: rgba(239,68,68,.14); }
 
+        /* Sidebar health dots + unread badges */
+        .health-dot { width: 7px; height: 7px; border-radius: 999px; flex: none; }
+        .health-dot.ok { background: #22c55e; }
+        .health-dot.missing { background: #ef4444; }
+        .health-dot.unknown { background: #6b7280; }
+        .hl-badge {
+            font-size: 9px; font-weight: 700; line-height: 1;
+            padding: 2px 5px; border-radius: 999px; flex: none;
+        }
+        .hl-badge.err { background: #dc2626; color: #fff; }
+        .hl-badge.warn { background: #ca8a04; color: #fff; }
+
+        /* Insights histogram bar */
+        .hist-bar { height: 6px; border-radius: 3px; }
+
         /* Light theme overrides */
         .light { background: #ffffff; color: #333333; }
         .light .bg-gray-900 { background: #fafafa !important; }
@@ -158,13 +173,19 @@
                 <button id="goTopBtn" class="hidden text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded text-sm hover:bg-gray-700" title="Go to top (g)">⬆</button>
                 <button id="goBottomBtn" class="hidden text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded text-sm hover:bg-gray-700" title="Go to bottom / live (G)">⬇</button>
 
+                <button id="panelBtn" class="text-gray-400 hover:text-white text-sm px-2 py-1 border border-gray-600 rounded" title="Insights panel">📊</button>
+                <button id="notifyBtn" class="hidden md:inline text-gray-500 hover:text-white text-lg px-1.5" title="Toggle desktop notifications for new errors">🔕</button>
                 <button id="themeBtn" class="text-gray-400 hover:text-white text-lg px-1.5" title="Switch theme">🎨</button>
                 <button id="downloadBtn" class="hidden md:inline text-gray-400 hover:text-white text-sm px-1.5" title="Download log">⬇️</button>
                 <button id="clearBtn" class="hidden md:inline text-gray-400 hover:text-red-400 text-sm px-1.5" title="Clear view">🚫</button>
             </div>
         </header>
 
-        <!-- VIEWER -->
+        <!-- OPEN TABS -->
+        <div id="tabBar" class="hidden h-8 shrink-0 bg-gray-800 border-b border-gray-600 items-center overflow-x-auto no-scrollbar text-xs"></div>
+
+        <!-- VIEWER + INSIGHTS -->
+        <div class="flex-1 flex min-h-0">
         <div id="viewer" class="flex-1 relative overflow-hidden log-font">
             <!-- Virtualized scroller -->
             <div id="scroll" class="absolute inset-0 overflow-auto md:pb-0">
@@ -199,6 +220,10 @@
             <button id="jumpLatest" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg z-20">
                 ↓ Jump to latest
             </button>
+        </div>
+
+        <!-- INSIGHTS PANEL -->
+        <aside id="insights" class="hidden w-72 shrink-0 bg-gray-800 border-l border-gray-600 overflow-y-auto"></aside>
         </div>
     </main>
 

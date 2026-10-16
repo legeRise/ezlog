@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import asyncio
+import re
 import threading
 from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
@@ -10,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse, Response
 
 from version import __version__ as EZLOG_VERSION
-from tailer import LogFile, TailHub
+from tailer import LogFile, TailHub, human_size
 
 # --- Load your logs logic ---
 try:
@@ -167,6 +168,61 @@ async def search_log(alias: str, q: str, limit: int = 200):
         "limit": limit,
         "truncated": len(matches) >= limit
     }
+
+
+# --- Sidebar health / recent-level snapshot -------------------------------
+STATUS_WINDOW = 64 * 1024  # bytes of tail scanned per alias
+
+_LEVEL_ERROR_RE = re.compile(rb"\b(?:ERROR|ERR|CRITICAL|FATAL|PANIC)\b", re.IGNORECASE)
+_LEVEL_WARN_RE = re.compile(rb"\b(?:WARN|WARNING)\b", re.IGNORECASE)
+
+
+def _recent_level_counts(path: str, window: int = STATUS_WINDOW) -> tuple[int, int]:
+    """Count ERROR/WARN markers in the last `window` bytes of a file.
+
+    Reads a bounded tail window instead of scanning the whole file, so polling
+    this stays cheap even for very large, actively written logs.
+    """
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as f:
+            start = max(0, size - window)
+            f.seek(start)
+            data = f.read()
+    except OSError:
+        return 0, 0
+    if start > 0:
+        nl = data.find(b"\n")
+        data = data[nl + 1:] if nl != -1 else data
+    return len(_LEVEL_ERROR_RE.findall(data)), len(_LEVEL_WARN_RE.findall(data))
+
+
+@app.get("/api/status")
+async def logs_status(sample_bytes: int = STATUS_WINDOW):
+    """Per-alias health plus recent ERROR/WARN counts, for the sidebar."""
+    logs = load_tracked_logs()
+    window = max(4096, min(sample_bytes, 1 << 20))
+
+    def build() -> dict:
+        out = {}
+        for alias, filepath in logs.items():
+            rec = {"exists": False, "errors": 0, "warnings": 0}
+            try:
+                st = os.stat(filepath)
+            except OSError:
+                out[alias] = rec
+                continue
+            rec.update(
+                exists=True,
+                size=st.st_size,
+                size_human=human_size(st.st_size),
+                modified=int(st.st_mtime),
+            )
+            rec["errors"], rec["warnings"] = _recent_level_counts(filepath, window)
+            out[alias] = rec
+        return out
+
+    return {"logs": await asyncio.to_thread(build)}
 
 
 @app.get("/api/logs/{alias}/download")
