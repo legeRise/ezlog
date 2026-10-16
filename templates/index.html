@@ -19,7 +19,7 @@
         /* Mobile: Hide scrollbars for cleaner look */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
+
         /* Desktop: Custom scrollbar */
         @media (min-width: 768px) {
             ::-webkit-scrollbar { width: 12px; height: 12px; }
@@ -27,13 +27,38 @@
             ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 6px; border: 3px solid var(--scrollbar-track); }
             ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
         }
-        .log-font { font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 1.6; }
-        
+
         /* Theme-specific scrollbar colors */
         .dark { --scrollbar-track: #1e1e1e; --scrollbar-thumb: #424242; --scrollbar-thumb-hover: #5a5a5a; }
         .light { --scrollbar-track: #f5f5f5; --scrollbar-thumb: #d0d0d0; --scrollbar-thumb-hover: #b0b0b0; }
         .solarized-light { --scrollbar-track: #fdf6e3; --scrollbar-thumb: #93a1a1; --scrollbar-thumb-hover: #657b83; }
-        
+
+        /* Monospace log font (system stack — no webfont needed, works offline) */
+        .log-font {
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+            font-size: 13px;
+            font-variant-ligatures: none;
+        }
+
+        /* Virtualized rows use a fixed height so positions are predictable */
+        .log-row { height: 22px; line-height: 22px; }
+        .nowrap-row { white-space: pre; }
+        .wrapped-row { white-space: pre-wrap; word-break: break-word; height: auto; line-height: 1.5; }
+        .log-num { user-select: none; }
+
+        /* Connection chip */
+        .conn-chip {
+            display: inline-flex; align-items: center; gap: .35rem;
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .04em; padding: .15rem .5rem; border-radius: 999px;
+            white-space: nowrap;
+        }
+        .conn-chip .dot { width: 7px; height: 7px; border-radius: 999px; background: currentColor; }
+        .conn-live { color: #22c55e; background: rgba(34,197,94,.14); }
+        .conn-history { color: #60a5fa; background: rgba(96,165,250,.14); }
+        .conn-connecting { color: #eab308; background: rgba(234,179,8,.14); }
+        .conn-offline { color: #ef4444; background: rgba(239,68,68,.14); }
+
         /* Light theme overrides */
         .light { background: #ffffff; color: #333333; }
         .light .bg-gray-900 { background: #fafafa !important; }
@@ -43,14 +68,14 @@
         .light .text-gray-400 { color: #666666 !important; }
         .light .text-gray-500 { color: #999999 !important; }
         .light .border-gray-600 { border-color: #d5d5d5 !important; }
-        .light .hover\\:bg-gray-700:hover { background: #ebebeb !important; }
-        .light .hover\\:bg-gray-800:hover { background: #f8f8f8 !important; }
-        .light .hover\\:border-gray-700 { border-color: #e0e0e0 !important; }
+        .light .hover\:bg-gray-700:hover { background: #ebebeb !important; }
+        .light .hover\:bg-gray-800:hover { background: #f8f8f8 !important; }
+        .light .hover\:border-gray-700 { border-color: #e0e0e0 !important; }
         .light .text-red-400 { color: #c53030 !important; }
         .light .text-yellow-400 { color: #d97706 !important; }
         .light .text-blue-400 { color: #2563eb !important; }
         .light .text-green-400 { color: #059669 !important; }
-        
+
         /* Solarized light theme */
         .solarized-light { background: #fdf6e3; color: #657b83; }
         .solarized-light .bg-gray-900 { background: #fdf6e3 !important; }
@@ -60,9 +85,9 @@
         .solarized-light .text-gray-400 { color: #657b83 !important; }
         .solarized-light .text-gray-500 { color: #93a1a1 !important; }
         .solarized-light .border-gray-600 { border-color: #d3cbb7 !important; }
-        .solarized-light .hover\\:bg-gray-700:hover { background: #e8e1ce !important; }
-        .solarized-light .hover\\:bg-gray-800:hover { background: #f0e9d6 !important; }
-        .solarized-light .hover\\:border-gray-700 { border-color: #cdc4af !important; }
+        .solarized-light .hover\:bg-gray-700:hover { background: #e8e1ce !important; }
+        .solarized-light .hover\:bg-gray-800:hover { background: #f0e9d6 !important; }
+        .solarized-light .hover\:border-gray-700 { border-color: #cdc4af !important; }
         .solarized-light .text-red-400 { color: #dc322f !important; }
         .solarized-light .text-yellow-400 { color: #b58900 !important; }
         .solarized-light .text-blue-400 { color: #268bd2 !important; }
@@ -72,94 +97,101 @@
 <!-- h-[100dvh] fixes scroll issues on mobile browsers with address bars -->
 <body class="bg-gray-900 text-gray-300 h-[100dvh] flex overflow-hidden relative">
 
-    <!-- MOBILE OVERLAY (Hidden on Desktop) -->
+    <!-- MOBILE OVERLAY -->
     <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-40 hidden md:hidden backdrop-blur-sm transition-opacity"></div>
 
     <!-- SIDEBAR -->
-    <!-- Mobile: Fixed, Off-screen (-translate-x-full), Slide-in transition -->
-    <!-- Desktop: Relative, Always visible (translate-x-0) -->
     <aside id="sidebar" class="fixed inset-y-0 left-0 w-72 bg-gray-800 border-r border-gray-600 transform -translate-x-full transition-transform duration-300 ease-in-out z-50 md:relative md:translate-x-0 flex flex-col shadow-2xl md:shadow-none">
-        <div class="p-4 border-b border-gray-600 font-bold tracking-wider text-white flex justify-between items-center">
+        <div class="h-14 p-4 border-b border-gray-600 font-bold tracking-wider text-white flex justify-between items-center">
             <span>EZLOG</span>
             <span class="text-xs font-normal text-gray-500">v{{ version }}</span>
-            <!-- Close button for mobile -->
             <button id="closeSidebar" class="md:hidden text-gray-400 hover:text-white">✕</button>
         </div>
-        
-        <!-- Project Search -->
+
         <div class="p-2 border-b border-gray-600">
-            <input type="text" id="projectSearch" placeholder="Filter projects..." 
+            <input type="text" id="projectSearch" placeholder="Filter logs..."
                 class="w-full bg-gray-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-500">
         </div>
 
-        <!-- Project List -->
         <div id="projectList" class="flex-1 overflow-y-auto">
-            <!-- Buttons injected by JS -->
+            <!-- Injected by JS -->
         </div>
     </aside>
 
     <!-- MAIN CONTENT -->
     <main class="flex-1 flex flex-col min-w-0 h-full">
-        
-        <!-- TOP TOOLBAR -->
-        <header class="h-14 bg-gray-800 border-b border-gray-600 flex items-center justify-between px-4 shadow-sm z-30 shrink-0">
-            <div class="flex items-center space-x-3 overflow-hidden flex-1 min-w-0">
-                <button id="toggleSidebar" class="text-gray-400 hover:text-white md:hidden p-1 border border-gray-600 rounded">
-                    ☰
-                </button>
-                <div class="flex flex-col overflow-hidden flex-1 min-w-0">
-                    <h2 id="currentLogTitle" class="font-semibold text-white truncate text-sm md:text-base">Select a project</h2>
-                    <span id="fileInfo" class="text-[11px] md:text-xs text-blue-400 font-medium truncate"></span>
+
+        <!-- COMMAND BAR -->
+        <header class="h-14 shrink-0 bg-gray-800 border-b border-gray-600 flex items-center gap-2 px-2 md:px-4 z-30">
+            <button id="toggleSidebar" class="md:hidden text-gray-400 hover:text-white p-1 border border-gray-600 rounded" title="Menu">☰</button>
+
+            <div class="flex flex-col overflow-hidden flex-1 min-w-0">
+                <div class="flex items-center gap-2 min-w-0">
+                    <h2 id="currentLogTitle" class="font-semibold text-white truncate text-sm md:text-base">Select a log</h2>
+                    <span id="connChip" class="conn-chip conn-offline hidden">
+                        <span class="dot"></span><span id="connLabel"></span>
+                    </span>
                 </div>
-                <span id="connectionStatus" class="px-2 py-0.5 rounded text-xs font-bold uppercase hidden"></span>
+                <span id="fileInfo" class="text-[11px] text-blue-400 font-medium truncate"></span>
             </div>
 
-            <div class="flex items-center space-x-2">
-                <!-- Navigation Buttons -->
-                <button id="goTopBtn" class="hidden text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded text-sm transition-colors hover:bg-gray-700" title="Go to Top">
-                    ⬆️ <span class="hidden md:inline">Top</span>
-                </button>
-                <button id="goBottomBtn" class="hidden text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded text-sm transition-colors hover:bg-gray-700" title="Go to Bottom">
-                    ⬇️ <span class="hidden md:inline">Bottom</span>
-                </button>
-                
-                <!-- Theme Switcher -->
-                <button id="themeBtn" class="text-gray-400 hover:text-white text-lg px-2" title="Switch Theme">🎨</button>
-                
-                <!-- Content Search (Hidden on very small screens if needed, or condensed) -->
-                <div class="relative group">
-                    <input type="text" id="logFilter" placeholder="Filter (Enter=full file)..." 
-                        class="bg-gray-900 border border-gray-600 text-sm rounded-md px-2 py-1.5 w-24 focus:w-48 md:w-48 transition-all focus:outline-none focus:border-blue-500">
+            <div class="flex items-center gap-1 md:gap-2">
+                <!-- Level filter chips -->
+                <div id="levelChips" class="hidden sm:flex items-center rounded border border-gray-600 overflow-hidden text-[11px] leading-none">
+                    <button data-level="ALL" class="lvl px-2 py-1.5 text-gray-400 hover:bg-gray-700">ALL</button>
+                    <button data-level="ERROR" class="lvl px-2 py-1.5 text-gray-400 hover:bg-gray-700 border-l border-gray-600">ERR</button>
+                    <button data-level="WARN" class="lvl px-2 py-1.5 text-gray-400 hover:bg-gray-700 border-l border-gray-600">WARN</button>
+                    <button data-level="INFO" class="lvl px-2 py-1.5 text-gray-400 hover:bg-gray-700 border-l border-gray-600">INFO</button>
                 </div>
 
-                <!-- Pause Button -->
-                <button id="pauseBtn" class="flex items-center space-x-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors border border-gray-600">
+                <input type="text" id="logFilter" placeholder="Filter (Enter=search file)"
+                    class="bg-gray-900 border border-gray-600 text-sm rounded-md px-2 py-1.5 w-24 focus:w-44 md:w-44 transition-all focus:outline-none focus:border-blue-500">
+
+                <button id="lineNumBtn" class="hidden md:inline text-gray-400 hover:text-white text-sm px-2 py-1 border border-gray-600 rounded" title="Toggle line numbers">#</button>
+                <button id="wrapBtn" class="hidden md:inline text-gray-400 hover:text-white text-sm px-2 py-1 border border-gray-600 rounded" title="Toggle line wrapping">↵</button>
+
+                <button id="pauseBtn" class="flex items-center space-x-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors border border-gray-600" title="Pause / resume live updates">
                     <span id="pauseIcon">⏸</span>
-                    <span id="pauseLabel" class="hidden md:inline">Pause</span>
-                    <span id="pendingCount" class="ml-1 bg-blue-500 text-white text-[10px] px-1.5 rounded-full hidden">0</span>
+                    <span id="pendingCount" class="bg-blue-500 text-white text-[10px] px-1.5 rounded-full hidden">0</span>
                 </button>
 
-                <button id="downloadBtn" class="text-gray-400 hover:text-white text-sm px-2" title="Download Current Log">⬇️</button>
-                
-                <button id="clearBtn" class="text-gray-400 hover:text-red-400 text-sm px-2" title="Clear View">🚫</button>
+                <button id="goTopBtn" class="hidden text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded text-sm hover:bg-gray-700" title="Go to top">⬆</button>
+                <button id="goBottomBtn" class="hidden text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded text-sm hover:bg-gray-700" title="Go to bottom / live">⬇</button>
+
+                <button id="themeBtn" class="text-gray-400 hover:text-white text-lg px-1.5" title="Switch theme">🎨</button>
+                <button id="downloadBtn" class="hidden md:inline text-gray-400 hover:text-white text-sm px-1.5" title="Download log">⬇️</button>
+                <button id="clearBtn" class="hidden md:inline text-gray-400 hover:text-red-400 text-sm px-1.5" title="Clear view">🚫</button>
             </div>
         </header>
 
-        <!-- LOG VIEWER AREA -->
-        <div id="logContainer" class="flex-1 overflow-y-auto p-3 md:p-4 log-font whitespace-pre-wrap break-all relative">
-            <!-- History loading indicator -->
-            <div id="historyLoader" class="hidden sticky top-0 left-0 right-0 bg-blue-500 text-white text-xs px-4 py-2 text-center z-10 shadow-md">
-                Loading older logs...
+        <!-- VIEWER -->
+        <div id="viewer" class="flex-1 relative overflow-hidden log-font">
+            <!-- Virtualized scroller -->
+            <div id="scroll" class="absolute inset-0 overflow-auto md:pb-0">
+                <div id="sizer" class="relative w-full">
+                    <div id="rows" class="absolute top-0 left-0 w-full"></div>
+                </div>
             </div>
-            
-            <div id="welcomeMsg" class="h-full flex flex-col items-center justify-center text-gray-500 text-center">
+
+            <!-- Overlays live OUTSIDE the scroller so clearing rows never removes them -->
+            <div id="welcome" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 text-center pointer-events-none">
                 <p class="text-lg">📋 Select a log file</p>
                 <p class="text-sm mt-2 opacity-70">Use the sidebar to start streaming</p>
             </div>
-            <!-- Loading indicator -->
-            <div id="loadingIndicator" class="hidden fixed top-20 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg animate-pulse">
-                Loading logs...
+
+            <div id="topLoader" class="hidden absolute top-2 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs px-3 py-1 rounded-full shadow-lg z-20">
+                Loading older logs…
             </div>
+
+            <div id="loadingIndicator" class="hidden absolute top-3 right-3 bg-blue-600 text-white text-xs px-3 py-1 rounded-full shadow-lg z-20">
+                Loading…
+            </div>
+
+            <div id="toast" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-800 border border-gray-600 text-gray-200 text-xs px-3 py-1.5 rounded-full shadow-lg z-20 max-w-[90%] truncate"></div>
+
+            <button id="jumpLatest" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg z-20">
+                ↓ Jump to latest
+            </button>
         </div>
     </main>
 
