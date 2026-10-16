@@ -16,11 +16,38 @@
     <!-- Local, prebuilt Tailwind (offline; no CDN) -->
     <link rel="stylesheet" href="/static/tailwind.css">
     <style>
-        /* Mobile: Hide scrollbars for cleaner look */
+        /* ============================== design tokens ============================== */
+        .dark {
+            --surface-1: #1e1e1e; --surface-2: #252526; --surface-3: #333333;
+            --surface-hover: #2e2e2f; --border: #3e3e42;
+            --fg: #d1d5db; --fg-muted: #9ca3af; --fg-dim: #505050;
+            --accent: #007acc; --accent-hover: #0062a3; --accent-soft: rgba(0,122,204,.16);
+            --lv-error: #f87171; --lv-warn: #facc15; --lv-info: #60a5fa;
+            --shadow: 0 10px 30px rgba(0,0,0,.5);
+            --scrollbar-track: #1e1e1e; --scrollbar-thumb: #424242; --scrollbar-thumb-hover: #5a5a5a;
+        }
+        .light {
+            --surface-1: #fafafa; --surface-2: #ffffff; --surface-3: #f5f5f5;
+            --surface-hover: #ebebeb; --border: #d5d5d5;
+            --fg: #444444; --fg-muted: #666666; --fg-dim: #999999;
+            --accent: #2563eb; --accent-hover: #1d4ed8; --accent-soft: rgba(37,99,235,.12);
+            --lv-error: #c53030; --lv-warn: #d97706; --lv-info: #2563eb;
+            --shadow: 0 10px 30px rgba(0,0,0,.14);
+            --scrollbar-track: #f5f5f5; --scrollbar-thumb: #d0d0d0; --scrollbar-thumb-hover: #b0b0b0;
+        }
+        .solarized-light {
+            --surface-1: #fdf6e3; --surface-2: #eee8d5; --surface-3: #f5eedb;
+            --surface-hover: #e8e1ce; --border: #d3cbb7;
+            --fg: #586e75; --fg-muted: #657b83; --fg-dim: #93a1a1;
+            --accent: #268bd2; --accent-hover: #1f6fa8; --accent-soft: rgba(38,139,210,.14);
+            --lv-error: #dc322f; --lv-warn: #b58900; --lv-info: #268bd2;
+            --shadow: 0 10px 30px rgba(0,0,0,.14);
+            --scrollbar-track: #fdf6e3; --scrollbar-thumb: #93a1a1; --scrollbar-thumb-hover: #657b83;
+        }
+
+        /* ============================== scrollbars ============================== */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-        /* Desktop: Custom scrollbar */
         @media (min-width: 768px) {
             ::-webkit-scrollbar { width: 12px; height: 12px; }
             ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
@@ -28,54 +55,168 @@
             ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
         }
 
-        /* Theme-specific scrollbar colors */
-        .dark { --scrollbar-track: #1e1e1e; --scrollbar-thumb: #424242; --scrollbar-thumb-hover: #5a5a5a; }
-        .light { --scrollbar-track: #f5f5f5; --scrollbar-thumb: #d0d0d0; --scrollbar-thumb-hover: #b0b0b0; }
-        .solarized-light { --scrollbar-track: #fdf6e3; --scrollbar-thumb: #93a1a1; --scrollbar-thumb-hover: #657b83; }
-
-        /* Monospace log font (system stack — no webfont needed, works offline) */
+        /* ============================== log text ============================== */
         .log-font {
             font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-            font-size: 13px;
-            font-variant-ligatures: none;
+            font-size: 13px; font-variant-ligatures: none;
         }
-
-        /* Virtualized rows use a fixed height so positions are predictable */
         .log-row { height: 22px; line-height: 22px; }
         .nowrap-row { white-space: pre; }
         .wrapped-row { white-space: pre-wrap; word-break: break-word; height: auto; line-height: 1.5; }
         .log-num { user-select: none; }
 
-        /* Connection chip */
-        .conn-chip {
-            display: inline-flex; align-items: center; gap: .35rem;
-            font-size: 10px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: .04em; padding: .15rem .5rem; border-radius: 999px;
-            white-space: nowrap;
+        /* ============================== icons ============================== */
+        .ico { width: 16px; height: 16px; display: block; flex: none; color: inherit; }
+        .ico-sm { width: 14px; height: 14px; }
+
+        /* ============================== toolbar controls ============================== */
+        .icon-btn {
+            position: relative; display: inline-flex; align-items: center; justify-content: center;
+            height: 30px; min-width: 30px; padding: 0 6px; gap: 6px;
+            border: 1px solid transparent; border-radius: 8px; background: transparent;
+            color: var(--fg-muted); font: inherit; font-size: 13px; cursor: pointer;
+            transition: background .12s ease, color .12s ease;
         }
+        .icon-btn:hover { background: var(--surface-hover); color: var(--fg); }
+        .icon-btn.is-on { color: var(--accent); background: var(--accent-soft); }
+        .icon-btn.is-warn { color: var(--lv-warn); background: rgba(245,158,11,.16); }
+        .icon-btn.hidden { display: none; }
+
+        /* responsive helpers that coexist with runtime .hidden toggling */
+        .desk-only { display: none; }
+        .mob-only { display: inline-flex; }
+        @media (min-width: 768px) {
+            .desk-only { display: inline-flex; }
+            .mob-only { display: none; }
+        }
+
+        .tb-sep { width: 1px; height: 20px; background: var(--border); margin: 0 3px; flex: none; }
+
+        /* segmented level filter — the active chip borrows its level's colour */
+        .seg { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .lvl {
+            font: inherit; font-size: 11px; font-weight: 600; letter-spacing: .03em; line-height: 1;
+            padding: 8px 10px; border: 0; border-left: 1px solid var(--border);
+            background: transparent; color: var(--fg-muted); cursor: pointer;
+            transition: background .12s ease, color .12s ease;
+        }
+        .lvl:first-child { border-left: 0; }
+        .lvl:hover { background: var(--surface-hover); color: var(--fg); }
+        .lvl.is-on { background: var(--surface-3); color: var(--fg); }
+        .lvl.lvl-error.is-on { background: rgba(239,68,68,.16); color: var(--lv-error); }
+        .lvl.lvl-warn.is-on { background: rgba(245,158,11,.16); color: var(--lv-warn); }
+        .lvl.lvl-info.is-on { background: rgba(59,130,246,.16); color: var(--lv-info); }
+
+        /* search / filter box */
+        .search-box {
+            display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 9px;
+            background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+            transition: border-color .12s ease, box-shadow .12s ease;
+        }
+        .search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+        .search-box .ico { color: var(--fg-dim); }
+        .search-box input {
+            flex: 1; min-width: 0; width: 100%; background: transparent; border: 0; outline: 0;
+            color: var(--fg); font: inherit; font-size: 13px; padding: 0;
+        }
+        .search-box input::placeholder { color: var(--fg-dim); }
+
+        /* pending-lines bubble on the pause button */
+        .count-pill {
+            position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: var(--accent); color: #fff; font-size: 9px; font-weight: 700;
+            border-radius: 999px; border: 2px solid var(--surface-2);
+        }
+        .count-pill.hidden { display: none; }
+
+        /* overflow menu */
+        .menu-wrap { position: relative; }
+        .menu {
+            position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 214px; padding: 5px;
+            border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); box-shadow: var(--shadow);
+        }
+        .menu.hidden { display: none; }
+        .menu-item {
+            display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 9px;
+            border: 0; border-radius: 7px; background: transparent; color: var(--fg);
+            font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+        }
+        .menu-item:hover { background: var(--surface-hover); }
+        .menu-item .ico { color: var(--fg-muted); }
+        .menu-item.is-on, .menu-item.is-on .ico { color: var(--accent); }
+        .menu-item.danger:hover { background: rgba(239,68,68,.14); color: var(--lv-error); }
+        .menu-item.danger:hover .ico { color: var(--lv-error); }
+        .menu-sep { height: 1px; background: var(--border); margin: 5px 4px; }
+
+        /* floating pills + buttons */
+        .pill {
+            display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600;
+            padding: 6px 11px; border-radius: 999px; box-shadow: var(--shadow);
+        }
+        .pill.hidden { display: none; }
+        .pill-accent { background: var(--accent); color: #fff; }
+        .pill-accent:hover { background: var(--accent-hover); }
+        .pill-muted { background: var(--surface-2); color: var(--fg-muted); border: 1px solid var(--border); }
+        .spinner {
+            width: 12px; height: 12px; flex: none; border-radius: 999px; border: 2px solid currentColor;
+            border-right-color: transparent; animation: spin .7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px;
+               border: 1px solid transparent; border-radius: 7px; font: inherit; font-size: 12px;
+               font-weight: 600; cursor: pointer; }
+        .btn-ghost { background: var(--surface-3); color: var(--fg); }
+        .btn-ghost:hover { background: var(--surface-hover); }
+        .btn-primary { background: var(--accent); color: #fff; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-x { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+                 border: 0; border-radius: 6px; background: transparent; color: var(--fg-dim); cursor: pointer; }
+        .btn-x:hover { background: var(--surface-3); color: var(--fg); }
+
+        .surface-card { background: var(--surface-2); color: var(--fg); border: 1px solid var(--border);
+                        border-radius: 10px; box-shadow: var(--shadow); }
+
+        /* ============================== connection chip ============================== */
+        .conn-chip { display: inline-flex; align-items: center; gap: .35rem; font-size: 10px; font-weight: 700;
+                     text-transform: uppercase; letter-spacing: .04em; padding: .15rem .5rem; border-radius: 999px; white-space: nowrap; }
         .conn-chip .dot { width: 7px; height: 7px; border-radius: 999px; background: currentColor; }
         .conn-live { color: #22c55e; background: rgba(34,197,94,.14); }
         .conn-history { color: #60a5fa; background: rgba(96,165,250,.14); }
         .conn-connecting { color: #eab308; background: rgba(234,179,8,.14); }
         .conn-offline { color: #ef4444; background: rgba(239,68,68,.14); }
+        .conn-idle { color: #6b7280; background: rgba(107,114,128,.14); }
 
-        /* Sidebar health dots + unread badges */
+        /* ============================== sidebar ============================== */
         .health-dot { width: 7px; height: 7px; border-radius: 999px; flex: none; }
         .health-dot.ok { background: #22c55e; }
         .health-dot.missing { background: #ef4444; }
         .health-dot.unknown { background: #6b7280; }
-        .hl-badge {
-            font-size: 9px; font-weight: 700; line-height: 1;
-            padding: 2px 5px; border-radius: 999px; flex: none;
-        }
-        .hl-badge.err { background: #dc2626; color: #fff; }
-        .hl-badge.warn { background: #ca8a04; color: #fff; }
+        .hl-badge { font-size: 9.5px; font-weight: 700; line-height: 1; min-width: 17px; text-align: center;
+                    padding: 2px 5px; border-radius: 7px; flex: none; }
+        .hl-badge.err { background: rgba(239,68,68,.16); color: var(--lv-error); }
+        .hl-badge.warn { background: rgba(245,158,11,.16); color: var(--lv-warn); }
+        .hl-badge.miss { background: #dc2626; color: #fff; }
 
-        /* Insights histogram bar */
+        /* ============================== tabs ============================== */
+        .tab { display: flex; align-items: center; border-right: 1px solid var(--border);
+               background: transparent; color: var(--fg-muted); }
+        .tab:hover { background: var(--surface-hover); color: var(--fg); }
+        .tab.is-active { background: var(--surface-1); color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+        .tab-label { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                     background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0 0 0 12px; }
+        .tab-x { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
+                 margin: 0 6px 0 7px; border: 0; border-radius: 5px; background: transparent; color: var(--fg-dim); cursor: pointer; }
+        .tab-x:hover { background: var(--surface-3); color: var(--fg); }
+        .tab-x .ico { width: 12px; height: 12px; }
+
+        /* ============================== insights ============================== */
         .hist-bar { height: 6px; border-radius: 3px; }
+        .ins-err { color: var(--lv-error); }
 
-        /* Light theme overrides */
-        .light { background: #ffffff; color: #333333; }
+        /* ============================== theme fallbacks for Tailwind text utilities ============================== */
+        .light .text-white { color: #111827 !important; }
         .light .bg-gray-900 { background: #fafafa !important; }
         .light .bg-gray-800 { background: #ffffff !important; border-color: #e5e5e5 !important; }
         .light .bg-gray-700 { background: #f5f5f5 !important; }
@@ -85,14 +226,15 @@
         .light .border-gray-600 { border-color: #d5d5d5 !important; }
         .light .hover\:bg-gray-700:hover { background: #ebebeb !important; }
         .light .hover\:bg-gray-800:hover { background: #f8f8f8 !important; }
-        .light .hover\:border-gray-700 { border-color: #e0e0e0 !important; }
         .light .text-red-400 { color: #c53030 !important; }
         .light .text-yellow-400 { color: #d97706 !important; }
         .light .text-blue-400 { color: #2563eb !important; }
-        .light .text-green-400 { color: #059669 !important; }
+        .light .bg-red-500 { background: #dc2626 !important; }
+        .light .bg-yellow-500 { background: #d97706 !important; }
+        .light .bg-blue-500 { background: #2563eb !important; }
+        .light .bg-gray-500 { background: #9ca3af !important; }
 
-        /* Solarized light theme */
-        .solarized-light { background: #fdf6e3; color: #657b83; }
+        .solarized-light .text-white { color: #073642 !important; }
         .solarized-light .bg-gray-900 { background: #fdf6e3 !important; }
         .solarized-light .bg-gray-800 { background: #eee8d5 !important; border-color: #d3cbb7 !important; }
         .solarized-light .bg-gray-700 { background: #f5eedb !important; }
@@ -102,30 +244,63 @@
         .solarized-light .border-gray-600 { border-color: #d3cbb7 !important; }
         .solarized-light .hover\:bg-gray-700:hover { background: #e8e1ce !important; }
         .solarized-light .hover\:bg-gray-800:hover { background: #f0e9d6 !important; }
-        .solarized-light .hover\:border-gray-700 { border-color: #cdc4af !important; }
         .solarized-light .text-red-400 { color: #dc322f !important; }
         .solarized-light .text-yellow-400 { color: #b58900 !important; }
         .solarized-light .text-blue-400 { color: #268bd2 !important; }
-        .solarized-light .text-green-400 { color: #859900 !important; }
+        .solarized-light .bg-red-500 { background: #dc322f !important; }
+        .solarized-light .bg-yellow-500 { background: #b58900 !important; }
+        .solarized-light .bg-blue-500 { background: #268bd2 !important; }
+        .solarized-light .bg-gray-500 { background: #93a1a1 !important; }
     </style>
 </head>
 <!-- h-[100dvh] fixes scroll issues on mobile browsers with address bars -->
 <body class="bg-gray-900 text-gray-300 h-[100dvh] flex overflow-hidden relative">
 
+    <!-- One monochrome icon set, shared by static markup and dynamically built rows -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false">
+        <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+        <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+        <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+        <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+        <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></symbol>
+        <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.25 6h.01M3.25 12h.01M3.25 18h.01"/></symbol>
+        <symbol id="i-wrap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M3 12h15a3 3 0 1 1 0 6h-4"/><path d="M16 16l-2 2 2 2"/><path d="M3 18h10"/></symbol>
+        <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5v14M15 5v14"/></symbol>
+        <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 4.5l12 7.5-12 7.5z"/></symbol>
+        <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6M6 12l6-6 6 6"/></symbol>
+        <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M7 20v-6M12 20V8M17 20v-9"/></symbol>
+        <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8.5A6 6 0 0 0 6 8.5c0 6-2 7.5-2 7.5h16s-2-1.5-2-7.5"/><path d="M10.5 20a2 2 0 0 0 3 0"/></symbol>
+        <symbol id="i-bell-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 5.6A6 6 0 0 1 18 8.5c0 2 .2 3.5.6 4.7M6 8.7c-.5 4.5-2 7.3-2 7.3h13"/><path d="M10.5 20a2 2 0 0 0 3 0M3 3l18 18"/></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5.6 5.6L4.2 4.2M19.8 19.8l-1.4-1.4M18.4 5.6l1.4-1.4M4.2 19.8l1.4-1.4"/></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a8 8 0 1 0 11.1 11.1z"/></symbol>
+        <symbol id="i-contrast" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 4h4a1 1 0 0 1 1 1v2M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+        <symbol id="i-more" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></symbol>
+    </svg>
+
     <!-- MOBILE OVERLAY -->
-    <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-40 hidden md:hidden backdrop-blur-sm transition-opacity"></div>
+    <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-40 hidden backdrop-blur-sm transition-opacity"></div>
 
     <!-- SIDEBAR -->
     <aside id="sidebar" class="fixed inset-y-0 left-0 w-72 bg-gray-800 border-r border-gray-600 transform -translate-x-full transition-transform duration-300 ease-in-out z-50 md:relative md:translate-x-0 flex flex-col shadow-2xl md:shadow-none">
-        <div class="h-14 p-4 border-b border-gray-600 font-bold tracking-wider text-white flex justify-between items-center">
-            <span>EZLOG</span>
-            <span class="text-xs font-normal text-gray-500">v{{ version }}</span>
-            <button id="closeSidebar" class="md:hidden text-gray-400 hover:text-white">✕</button>
+        <div class="h-14 px-4 border-b border-gray-600 flex justify-between items-center">
+            <span class="flex items-center gap-2 font-bold tracking-wider text-white">
+                <svg class="ico" style="color:var(--accent)"><use href="#i-file"></use></svg>EZLOG
+            </span>
+            <span class="flex items-center gap-1">
+                <span class="text-xs font-normal text-gray-500">v{{ version }}</span>
+                <button id="closeSidebar" class="mob-only icon-btn" title="Close menu"><svg class="ico"><use href="#i-close"></use></svg></button>
+            </span>
         </div>
 
         <div class="p-2 border-b border-gray-600">
-            <input type="text" id="projectSearch" placeholder="Filter logs..."
-                class="w-full bg-gray-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-500">
+            <label class="search-box w-full">
+                <svg class="ico"><use href="#i-search"></use></svg>
+                <input type="text" id="projectSearch" placeholder="Filter logs…">
+            </label>
         </div>
 
         <div id="projectList" class="flex-1 overflow-y-auto">
@@ -137,8 +312,8 @@
     <main class="flex-1 flex flex-col min-w-0 h-full">
 
         <!-- COMMAND BAR -->
-        <header class="h-14 shrink-0 bg-gray-800 border-b border-gray-600 flex items-center gap-2 px-2 md:px-4 z-30">
-            <button id="toggleSidebar" class="md:hidden text-gray-400 hover:text-white p-1 border border-gray-600 rounded" title="Menu">☰</button>
+        <header class="h-14 shrink-0 bg-gray-800 border-b border-gray-600 flex items-center gap-1.5 md:gap-2 px-2 md:px-3 z-30">
+            <button id="toggleSidebar" class="mob-only icon-btn" title="Menu"><svg class="ico"><use href="#i-menu"></use></svg></button>
 
             <div class="flex flex-col overflow-hidden flex-1 min-w-0">
                 <div class="flex items-center gap-2 min-w-0">
@@ -147,42 +322,49 @@
                         <span class="dot"></span><span id="connLabel"></span>
                     </span>
                 </div>
-                <span id="fileInfo" class="text-[11px] text-blue-400 font-medium truncate"></span>
+                <span id="fileInfo" class="text-[11px] text-gray-500 truncate"></span>
             </div>
 
-            <div class="flex items-center gap-1 md:gap-2">
-                <!-- Level filter chips -->
-                <div id="levelChips" class="hidden sm:flex items-center rounded border border-gray-600 overflow-hidden text-[11px] leading-none">
-                    <button data-level="ALL" class="lvl px-2 py-1.5 text-gray-400 hover:bg-gray-700">ALL</button>
-                    <button data-level="ERROR" class="lvl px-2 py-1.5 text-gray-400 hover:bg-gray-700 border-l border-gray-600">ERR</button>
-                    <button data-level="WARN" class="lvl px-2 py-1.5 text-gray-400 hover:bg-gray-700 border-l border-gray-600">WARN</button>
-                    <button data-level="INFO" class="lvl px-2 py-1.5 text-gray-400 hover:bg-gray-700 border-l border-gray-600">INFO</button>
+            <div id="levelChips" class="seg hidden sm:flex" role="group" aria-label="Filter by level">
+                <button data-level="ALL" class="lvl is-on">All</button>
+                <button data-level="ERROR" class="lvl lvl-error">Err</button>
+                <button data-level="WARN" class="lvl lvl-warn">Warn</button>
+                <button data-level="INFO" class="lvl lvl-info">Info</button>
+            </div>
+
+            <label class="search-box w-36 md:w-52 shrink-0" title="Filter loaded lines · press Enter to search the whole file">
+                <svg class="ico"><use href="#i-search"></use></svg>
+                <input type="text" id="logFilter" placeholder="Filter · Enter = search">
+            </label>
+
+            <span class="tb-sep desk-only"></span>
+
+            <button id="lineNumBtn" class="icon-btn desk-only" title="Toggle line numbers (L)"><svg class="ico"><use href="#i-list"></use></svg></button>
+            <button id="wrapBtn" class="icon-btn desk-only" title="Toggle line wrapping (W)"><svg class="ico"><use href="#i-wrap"></use></svg></button>
+            <button id="goTopBtn" class="icon-btn hidden" title="Go to top (g)"><svg class="ico"><use href="#i-up"></use></svg></button>
+            <button id="pauseBtn" class="icon-btn" title="Pause / resume live updates (p)">
+                <span id="pauseIcon"><svg class="ico"><use href="#i-pause"></use></svg></span>
+                <span id="pendingCount" class="count-pill hidden">0</span>
+            </button>
+            <button id="panelBtn" class="icon-btn" title="Insights panel"><svg class="ico"><use href="#i-chart"></use></svg></button>
+
+            <span class="tb-sep desk-only"></span>
+
+            <button id="downloadBtn" class="icon-btn desk-only" title="Download log"><svg class="ico"><use href="#i-download"></use></svg></button>
+
+            <div class="menu-wrap">
+                <button id="moreBtn" class="icon-btn" title="More options" aria-haspopup="true" aria-expanded="false"><svg class="ico"><use href="#i-more"></use></svg></button>
+                <div id="moreMenu" class="menu hidden" role="menu">
+                    <button id="notifyBtn" class="menu-item" role="menuitem"><svg class="ico"><use href="#i-bell-off"></use></svg><span id="notifyLabel">Desktop notifications</span></button>
+                    <button id="themeBtn" class="menu-item" role="menuitem"><svg class="ico"><use href="#i-moon"></use></svg><span id="themeLabel">Theme: Dark</span></button>
+                    <div class="menu-sep"></div>
+                    <button id="clearBtn" class="menu-item danger" role="menuitem"><svg class="ico"><use href="#i-trash"></use></svg><span>Clear view</span></button>
                 </div>
-
-                <input type="text" id="logFilter" placeholder="Filter · Enter = search file"
-                    class="bg-gray-900 border border-gray-600 text-sm rounded-md px-2 py-1.5 w-24 focus:w-44 md:w-44 transition-all focus:outline-none focus:border-blue-500">
-
-                <button id="lineNumBtn" class="hidden md:inline text-gray-400 hover:text-white text-sm px-2 py-1 border border-gray-600 rounded" title="Toggle line numbers (L)">#</button>
-                <button id="wrapBtn" class="hidden md:inline text-gray-400 hover:text-white text-sm px-2 py-1 border border-gray-600 rounded" title="Toggle line wrapping (W)">↵</button>
-
-                <button id="pauseBtn" class="flex items-center space-x-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors border border-gray-600" title="Pause / resume live updates (p)">
-                    <span id="pauseIcon">⏸</span>
-                    <span id="pendingCount" class="bg-blue-500 text-white text-[10px] px-1.5 rounded-full hidden">0</span>
-                </button>
-
-                <button id="goTopBtn" class="hidden text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded text-sm hover:bg-gray-700" title="Go to top (g)">⬆</button>
-                <button id="goBottomBtn" class="hidden text-gray-400 hover:text-white px-2 py-1 border border-gray-600 rounded text-sm hover:bg-gray-700" title="Go to bottom / live (G)">⬇</button>
-
-                <button id="panelBtn" class="text-gray-400 hover:text-white text-sm px-2 py-1 border border-gray-600 rounded" title="Insights panel">📊</button>
-                <button id="notifyBtn" class="hidden md:inline text-gray-500 hover:text-white text-lg px-1.5" title="Toggle desktop notifications for new errors">🔕</button>
-                <button id="themeBtn" class="text-gray-400 hover:text-white text-lg px-1.5" title="Switch theme">🎨</button>
-                <button id="downloadBtn" class="hidden md:inline text-gray-400 hover:text-white text-sm px-1.5" title="Download log">⬇️</button>
-                <button id="clearBtn" class="hidden md:inline text-gray-400 hover:text-red-400 text-sm px-1.5" title="Clear view">🚫</button>
             </div>
         </header>
 
         <!-- OPEN TABS -->
-        <div id="tabBar" class="hidden h-8 shrink-0 bg-gray-800 border-b border-gray-600 items-center overflow-x-auto no-scrollbar text-xs"></div>
+        <div id="tabBar" class="hidden h-9 shrink-0 bg-gray-800 border-b border-gray-600 flex overflow-x-auto no-scrollbar text-xs"></div>
 
         <!-- VIEWER + INSIGHTS -->
         <div class="flex-1 flex min-h-0">
@@ -196,28 +378,28 @@
 
             <!-- Overlays live OUTSIDE the scroller so clearing rows never removes them -->
             <div id="welcome" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 text-center pointer-events-none">
-                <p class="text-lg">📋 Select a log file</p>
-                <p class="text-sm mt-2 opacity-70">Use the sidebar to start streaming</p>
+                <svg class="ico" style="width:34px;height:34px;opacity:.5;color:var(--fg-dim)"><use href="#i-file"></use></svg>
+                <p class="text-sm mt-3">Select a log file to start streaming</p>
             </div>
 
-            <div id="topLoader" class="hidden absolute top-2 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs px-3 py-1 rounded-full shadow-lg z-20">
-                Loading older logs…
+            <div id="topLoader" class="pill pill-muted hidden absolute top-3 left-1/2 -translate-x-1/2 z-20">
+                <span class="spinner"></span>Loading older logs…
             </div>
 
-            <div id="loadingIndicator" class="hidden absolute top-3 right-3 bg-blue-600 text-white text-xs px-3 py-1 rounded-full shadow-lg z-20">
-                Loading…
+            <div id="loadingIndicator" class="pill pill-muted hidden absolute top-3 right-3 z-20">
+                <span class="spinner"></span>Loading…
             </div>
 
-            <div id="toast" class="hidden absolute bottom-4 left-4 bg-gray-800 border border-gray-600 text-gray-200 text-xs px-3 py-1.5 rounded-full shadow-lg z-20 max-w-[70%] truncate"></div>
+            <div id="toast" class="surface-card hidden absolute bottom-4 left-4 text-xs px-3 py-2 z-20 max-w-[70%] truncate"></div>
 
-            <div id="selBar" class="hidden absolute bottom-4 right-4 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-20 flex items-center gap-2 px-3 py-1.5 text-xs">
-                <span id="selCount" class="text-gray-300 font-medium"></span>
-                <button id="selCopy" class="px-2 py-0.5 bg-gray-700 hover:bg-gray-600 rounded transition-colors" title="Copy selected lines (c)">Copy</button>
-                <button id="selDownload" class="px-2 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors" title="Download selected lines">Download</button>
-                <button id="selClear" class="px-1 text-gray-400 hover:text-white" title="Clear selection (Esc)">✕</button>
+            <div id="selBar" class="surface-card hidden absolute bottom-4 right-4 z-20 flex items-center gap-2 px-2.5 py-1.5 text-xs">
+                <span id="selCount" class="text-gray-300 font-medium px-1"></span>
+                <button id="selCopy" class="btn btn-ghost" title="Copy selected lines (c)"><svg class="ico ico-sm"><use href="#i-copy"></use></svg>Copy</button>
+                <button id="selDownload" class="btn btn-primary" title="Download selected lines"><svg class="ico ico-sm"><use href="#i-download"></use></svg>Download</button>
+                <button id="selClear" class="btn-x" title="Clear selection (Esc)"><svg class="ico"><use href="#i-close"></use></svg></button>
             </div>
 
-            <button id="jumpLatest" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg z-20">
+            <button id="jumpLatest" class="pill pill-accent hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
                 ↓ Jump to latest
             </button>
         </div>

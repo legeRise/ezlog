@@ -30,6 +30,12 @@ function levelClass(level) {
     }
 }
 
+// Inline monochrome icon from the SVG sprite in index.html — the single icon
+// language used everywhere (no emoji in the chrome).
+function svgIcon(name, cls = 'ico') {
+    return `<svg class="${cls}"><use href="#i-${name}"></use></svg>`;
+}
+
 // Fill `el` with `text`, wrapping case-insensitive occurrences of `query` in
 // <mark>. Built from text nodes only, so log content can never inject markup.
 function markMatches(el, text, query) {
@@ -165,7 +171,6 @@ class LogViewer {
             filterInput: document.getElementById('logFilter'),
             themeBtn: document.getElementById('themeBtn'),
             goTopBtn: document.getElementById('goTopBtn'),
-            goBottomBtn: document.getElementById('goBottomBtn'),
             levelChips: document.getElementById('levelChips'),
             lineNumBtn: document.getElementById('lineNumBtn'),
             wrapBtn: document.getElementById('wrapBtn'),
@@ -205,7 +210,6 @@ class LogViewer {
         document.getElementById('clearBtn').addEventListener('click', () => this.clearView());
 
         this.dom.goTopBtn.addEventListener('click', () => this.goToTop());
-        this.dom.goBottomBtn.addEventListener('click', () => this.goToBottom());
         this.dom.jumpLatest.addEventListener('click', () => this.jumpToLatest());
 
         this.dom.lineNumBtn.addEventListener('click', () => this.setShowNumbers(!this.showNumbers));
@@ -241,6 +245,26 @@ class LogViewer {
 
         this.dom.panelBtn.addEventListener('click', () => this.toggleInsights());
         this.dom.notifyBtn.addEventListener('click', () => this.toggleNotify());
+
+        // Overflow menu — keeps the rarely used, stateful controls out of the bar.
+        const moreBtn = document.getElementById('moreBtn');
+        const moreMenu = document.getElementById('moreMenu');
+        this._closeMore = () => {
+            moreMenu.classList.add('hidden');
+            moreBtn.setAttribute('aria-expanded', 'false');
+        };
+        moreBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const nowOpen = moreMenu.classList.toggle('hidden');
+            moreBtn.setAttribute('aria-expanded', String(!nowOpen));
+        });
+        document.addEventListener('click', (e) => {
+            if (!moreMenu.classList.contains('hidden') && !e.target.closest('.menu-wrap')) this._closeMore();
+        });
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            this.clearView();
+            this._closeMore();
+        });
 
         document.addEventListener('keydown', (e) => this.onKeydown(e));
 
@@ -312,14 +336,14 @@ class LogViewer {
             !lower || items[s].alias.toLowerCase().includes(lower) || s.toLowerCase().includes(lower));
 
         const header = document.createElement('button');
-        header.className = 'w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-gray-300 hover:bg-gray-700 hover:text-white transition-colors';
+        header.className = 'w-full flex items-center justify-between px-4 py-2 text-sm font-semibold text-gray-300 hover:bg-gray-700 hover:text-white transition-colors';
         header.innerHTML = `
-            <span class="flex items-center gap-2">
-                <span class="text-blue-400">📁</span>
-                <span>${this.escape(projectName)}</span>
+            <span class="flex items-center gap-2 min-w-0">
+                <svg class="ico ico-sm" style="color:var(--fg-dim)"><use href="#i-folder"></use></svg>
+                <span class="truncate">${this.escape(projectName)}</span>
                 <span class="text-xs text-gray-500 font-normal">(${visible.length})</span>
             </span>
-            <span class="project-chevron text-gray-500 transition-transform duration-200">▼</span>`;
+            <span class="project-chevron transition-transform duration-200"><svg class="ico ico-sm"><use href="#i-chevron"></use></svg></span>`;
 
         const logList = document.createElement('div');
         logList.className = 'overflow-hidden transition-all duration-200';
@@ -337,7 +361,7 @@ class LogViewer {
         });
 
         const inner = document.createElement('div');
-        inner.className = 'py-1';
+        inner.className = 'py-0.5';
         for (const short of visible) this.createLogButton(items[short].alias, short, inner, projectName);
         logList.appendChild(inner);
 
@@ -363,8 +387,9 @@ class LogViewer {
         dot.title = 'Health unknown';
 
         const icon = document.createElement('span');
-        icon.className = 'text-xs text-gray-500';
-        icon.textContent = '📄';
+        icon.className = 'flex items-center';
+        icon.style.color = 'var(--fg-dim)';
+        icon.innerHTML = svgIcon('file', 'ico ico-sm');
 
         const name = document.createElement('span');
         name.className = 'truncate flex-1';
@@ -650,10 +675,7 @@ class LogViewer {
 
     updateLevelChips() {
         this.dom.levelChips.querySelectorAll('.lvl').forEach((btn) => {
-            const on = btn.dataset.level === this.filterLevel;
-            btn.classList.toggle('bg-blue-500', on);
-            btn.classList.toggle('text-white', on);
-            btn.classList.toggle('text-gray-400', !on);
+            btn.classList.toggle('is-on', btn.dataset.level === this.filterLevel);
         });
     }
 
@@ -1074,6 +1096,7 @@ class LogViewer {
             return;
         }
         if (e.key === 'Escape') {
+            if (this._closeMore) this._closeMore();
             if (typing) this.dom.filterInput.blur();
             this.clearSearchState();
             return;
@@ -1108,10 +1131,8 @@ class LogViewer {
     }
 
     updatePauseButton() {
-        this.dom.pauseIcon.textContent = this.paused ? '▶' : '⏸';
-        this.dom.pauseBtn.classList.toggle('bg-yellow-700', this.paused);
-        this.dom.pauseBtn.classList.toggle('border-yellow-500', this.paused);
-        this.dom.pauseBtn.classList.toggle('bg-gray-700', !this.paused);
+        this.dom.pauseIcon.innerHTML = svgIcon(this.paused ? 'play' : 'pause');
+        this.dom.pauseBtn.classList.toggle('is-warn', this.paused);
     }
 
     updatePendingBadge() {
@@ -1136,10 +1157,8 @@ class LogViewer {
     }
 
     updateToggleButtons() {
-        this.dom.lineNumBtn.classList.toggle('bg-gray-600', this.showNumbers);
-        this.dom.lineNumBtn.classList.toggle('text-white', this.showNumbers);
-        this.dom.wrapBtn.classList.toggle('bg-gray-600', this.wrap);
-        this.dom.wrapBtn.classList.toggle('text-white', this.wrap);
+        this.dom.lineNumBtn.classList.toggle('is-on', this.showNumbers);
+        this.dom.wrapBtn.classList.toggle('is-on', this.wrap);
     }
 
     loadPrefs() {
@@ -1176,7 +1195,6 @@ class LogViewer {
 
     updateNavButtons() {
         this.dom.goTopBtn.classList.toggle('hidden', this.startLine <= 1 || this.mode === 'search');
-        this.dom.goBottomBtn.classList.toggle('hidden', this.mode === 'live' && this.following && this.newWhileAway === 0);
     }
 
     showLoading(show) {
@@ -1306,9 +1324,9 @@ class LogViewer {
 
     applyNotifyButton() {
         const on = this.notifyEnabled && 'Notification' in window && window.Notification.permission === 'granted';
-        this.dom.notifyBtn.textContent = on ? '🔔' : '🔕';
-        this.dom.notifyBtn.classList.toggle('text-white', on);
-        this.dom.notifyBtn.classList.toggle('text-gray-500', !on);
+        this.dom.notifyBtn.classList.toggle('is-on', on);
+        this.dom.notifyBtn.innerHTML = svgIcon(on ? 'bell' : 'bell-off') +
+            `<span>${on ? 'Notifications on for errors' : 'Notify me about errors'}</span>`;
     }
 
     maybeNotify(rows) {
@@ -1354,7 +1372,7 @@ class LogViewer {
 
             const base = this.baseline[alias] || { errors: 0, warnings: 0 };
             if (!rec.exists) {
-                item.badge.className = 'hl-badge err';
+                item.badge.className = 'hl-badge miss';
                 item.badge.textContent = '!';
                 item.badge.title = 'File missing';
             } else if ((rec.errors || 0) > (base.errors || 0)) {
@@ -1434,16 +1452,15 @@ class LogViewer {
         for (const alias of this.tabs) {
             const isActive = alias === this.currentAlias;
             const tab = document.createElement('div');
-            tab.className = 'flex items-center shrink-0 border-r border-gray-600 ' +
-                (isActive ? 'bg-gray-900 text-white' : 'text-gray-400 hover:bg-gray-700');
+            tab.className = 'tab shrink-0' + (isActive ? ' is-active' : '');
             const label = document.createElement('button');
-            label.className = 'px-3 py-1.5 truncate max-w-[180px]';
+            label.className = 'tab-label';
             label.textContent = alias;
             label.title = alias;
             label.onclick = () => this.connect(alias);
             const close = document.createElement('button');
-            close.className = 'px-2 py-1.5 text-gray-500 hover:text-white';
-            close.textContent = '✕';
+            close.className = 'tab-x';
+            close.innerHTML = svgIcon('close');
             close.title = 'Close tab';
             close.onclick = (e) => { e.stopPropagation(); this.closeTab(alias); };
             tab.append(label, close);
@@ -1483,8 +1500,9 @@ class LogViewer {
     applyTheme(theme) {
         document.documentElement.className = theme;
         localStorage.setItem('ezlog-theme', theme);
-        const icons = { dark: '🌙', light: '☀️', 'solarized-light': '🎨' };
-        if (this.dom.themeBtn) this.dom.themeBtn.textContent = icons[theme] || '🎨';
+        const meta = { dark: ['moon', 'Dark'], light: ['sun', 'Light'], 'solarized-light': ['contrast', 'Solarized'] };
+        const [ic, label] = meta[theme] || meta.dark;
+        if (this.dom.themeBtn) this.dom.themeBtn.innerHTML = svgIcon(ic) + `<span>Theme: ${label}</span>`;
         this.scheduleRender();
     }
 
