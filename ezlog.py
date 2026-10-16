@@ -63,8 +63,7 @@ async def get_home(request: Request):
     """Serves the UI shell."""
     logs = load_tracked_logs()
     groups = group_logs_by_project(logs)
-    return templates.TemplateResponse("index.html", {
-        "request": request, 
+    return templates.TemplateResponse(request, "index.html", {
         "aliases_json": json.dumps(logs),
         "groups_json": json.dumps(groups),
         "initial_alias": "",
@@ -78,8 +77,7 @@ async def get_log_page(request: Request, alias: str):
     logs = load_tracked_logs()
     groups = group_logs_by_project(logs)
     initial_alias = alias if alias in logs else ""
-    return templates.TemplateResponse("index.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "index.html", {
         "aliases_json": json.dumps(logs),
         "groups_json": json.dumps(groups),
         "initial_alias": initial_alias,
