@@ -356,10 +356,14 @@ ezlog start --port 9200 --host 127.0.0.1
 ezlog version         # Show version + install details
 ezlog status          # Check if running
 ezlog stop            # Stop background process
-ezlog start           # Start in background
+ezlog start           # Start in background (verifies the port actually came up)
+ezlog open            # Open the web UI in your browser
 ezlog run             # Run in foreground (for debugging)
 ezlog upgrade         # Auto-download and install latest release
 ```
+
+`ezlog start` waits until the server is accepting connections before reporting
+success, and writes server output to `~/.ezlog/ezlog.log` for troubleshooting.
 
 **Upgrade options:**
 ```bash

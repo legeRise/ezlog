@@ -2,11 +2,14 @@ import typer
 import os
 import sys
 import signal
+import socket
 import subprocess
 import hashlib
 import tarfile
 import tempfile
+import time
 import urllib.request
+import webbrowser
 import json
 from pathlib import Path
 from tracked_logs import (
@@ -46,6 +49,30 @@ def get_pid():
 def is_running():
     """Check if ezlog is running in background"""
     return get_pid() is not None
+
+
+def _connect_host(host: str) -> str:
+    """Host to dial for a health check (0.0.0.0 / :: -> loopback)."""
+    return "127.0.0.1" if host in ("0.0.0.0", "::", "") else host
+
+
+def port_in_use(host: str, port: int, timeout: float = 0.3) -> bool:
+    """True if something is accepting connections on host:port."""
+    try:
+        with socket.create_connection((_connect_host(host), port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def wait_for_port(host: str, port: int, timeout: float = 5.0) -> bool:
+    """Wait up to `timeout` seconds for host:port to accept connections."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if port_in_use(host, port):
+            return True
+        time.sleep(0.1)
+    return False
 
 
 def sha256_file(path: Path):
@@ -281,13 +308,20 @@ def start(port: int = 9200, host: str = "0.0.0.0"):
     """Start ezlog in background"""
     if is_running():
         pid = get_pid()
+        cfg = load_run_config() or {"port": port, "host": host}
         typer.echo(f"ezlog is already running (PID: {pid})")
-        typer.echo(f"Visit http://{host}:{port}")
+        typer.echo(f"Visit http://{cfg['host']}:{cfg['port']}")
         return
-    
+
+    if port_in_use(host, port):
+        typer.echo(f"[Error] Port {port} is already in use by another process.", err=True)
+        typer.echo("Choose another port, e.g. ezlog start --port 9201", err=True)
+        raise typer.Exit(1)
+
     # Start in background
     APP_DIR.mkdir(parents=True, exist_ok=True)
-    
+    log_path = APP_DIR / "ezlog.log"
+
     # Get current executable path
     if getattr(sys, 'frozen', False):
         # Running as compiled binary
@@ -295,22 +329,35 @@ def start(port: int = 9200, host: str = "0.0.0.0"):
     else:
         # Running as Python script
         exe_path = [sys.executable, __file__]
-    
-    # Start background process
-    process = subprocess.Popen(
-        exe_path + ["run", "--port", str(port), "--host", host],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True
-    )
-    
+
+    # Start background process, capturing output for debugging
+    log_file = open(log_path, "ab")
+    try:
+        process = subprocess.Popen(
+            exe_path + ["run", "--port", str(port), "--host", host],
+            stdout=log_file,
+            stderr=log_file,
+            start_new_session=True
+        )
+    finally:
+        log_file.close()
+
     # Save PID
     PID_FILE.write_text(str(process.pid))
     save_run_config(port, host)
-    
-    typer.echo(f"✅ Started ezlog in background (PID: {process.pid})")
-    typer.echo(f"🌐 Visit http://{host}:{port}")
-    typer.echo(f"⏹️  Stop with: ezlog stop")
+
+    # Verify the server actually came up before claiming success
+    if wait_for_port(host, port, timeout=5.0):
+        typer.echo(f"✅ Started ezlog in background (PID: {process.pid})")
+        typer.echo(f"🌐 Visit http://{host}:{port}")
+        typer.echo(f"⏹️  Stop with: ezlog stop")
+    else:
+        PID_FILE.unlink(missing_ok=True)
+        typer.echo("[Error] ezlog did not start (port not responding).", err=True)
+        if process.poll() is not None:
+            typer.echo(f"The server process exited immediately (code {process.returncode}).", err=True)
+        typer.echo(f"See log for details: {log_path}", err=True)
+        raise typer.Exit(1)
 
 
 @cli.command()
@@ -340,6 +387,29 @@ def status():
     else:
         typer.echo("❌ ezlog is not running")
         typer.echo("▶️  Start with: ezlog start")
+
+
+@cli.command("open")
+def open_cmd(
+    port: int = typer.Option(0, "--port", help="Port (default: last used)"),
+    host: str = typer.Option("", "--host", help="Host (default: last used)")
+):
+    """Open the ezlog web UI in your browser"""
+    if not is_running():
+        typer.echo("ezlog is not running. Start it with: ezlog start")
+        raise typer.Exit(1)
+
+    cfg = load_run_config() or {"port": 9200, "host": "0.0.0.0"}
+    use_port = port if port > 0 else cfg["port"]
+    use_host = host if host else cfg["host"]
+
+    url = f"http://{_connect_host(use_host)}:{use_port}"
+    typer.echo(f"🌐 Opening {url}")
+    try:
+        webbrowser.open(url)
+    except Exception as e:
+        typer.echo(f"Could not open a browser: {e}", err=True)
+        typer.echo(f"Open it manually: {url}")
 
 
 @cli.command()

@@ -1,87 +1,26 @@
 import os
 import sys
+import json
 import asyncio
+import threading
 from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse
-import json
-from collections import deque
 
 from version import __version__ as EZLOG_VERSION
+from tailer import LogFile, TailHub
 
-
-def get_file_metadata(filepath):
-    """Get file size and line count efficiently"""
-    if not os.path.exists(filepath):
-        return {"size": 0, "lines": 0, "size_human": "0 B"}
-    
-    file_size = os.path.getsize(filepath)
-    
-    # Count lines efficiently
-    line_count = 0
-    with open(filepath, 'rb') as f:
-        for _ in f:
-            line_count += 1
-    
-    # Human-readable size
-    if file_size < 1024:
-        size_human = f"{file_size} B"
-    elif file_size < 1024 * 1024:
-        size_human = f"{file_size / 1024:.1f} KB"
-    elif file_size < 1024 * 1024 * 1024:
-        size_human = f"{file_size / (1024 * 1024):.1f} MB"
-    else:
-        size_human = f"{file_size / (1024 * 1024 * 1024):.2f} GB"
-    
-    return {"size": file_size, "lines": line_count, "size_human": size_human}
-
-
-def tail_file_lines(filepath, n=500):
-    """Get the last N lines from a file efficiently"""
-    try:
-        with open(filepath, 'r', errors='replace') as f:
-            return list(deque(f, n))
-    except:
-        return []
-
-
-def get_lines_range(filepath, start_line, count):
-    """Get a range of lines from a file (1-indexed)"""
-    try:
-        lines = []
-        with open(filepath, 'r', errors='replace') as f:
-            for i, line in enumerate(f, 1):
-                if i >= start_line and i < start_line + count:
-                    lines.append(line.rstrip())
-                if i >= start_line + count:
-                    break
-        return lines
-    except:
-        return []
-
-
-def search_file_lines(filepath, term, limit=200):
-    """Search entire file and return matching lines with line numbers"""
-    if not term:
-        return []
-
-    matches = []
-    term_lower = term.lower()
-
-    try:
-        with open(filepath, 'r', errors='replace') as f:
-            for line_no, line in enumerate(f, 1):
-                text = line.rstrip()
-                if term_lower in text.lower():
-                    matches.append({"line": line_no, "text": text})
-                    if len(matches) >= limit:
-                        break
-    except:
-        return []
-
-    return matches
+# --- Load your logs logic ---
+try:
+    from tracked_logs import load_tracked_logs, group_logs_by_project
+except ImportError:
+    # Dummy data for testing
+    def load_tracked_logs():
+        return {f"Project {i}": "test.log" for i in range(1, 50)}
+    def group_logs_by_project(data):
+        return {"_root": {k: {"alias": k, "path": v} for k, v in data.items()}}
 
 
 def get_resource_path(relative_path):
@@ -94,21 +33,29 @@ def get_resource_path(relative_path):
         base_path = Path(__file__).parent
     return str(base_path / relative_path)
 
-# --- Load your logs logic ---
-try:
-    from tracked_logs import load_tracked_logs, group_logs_by_project
-except ImportError:
-    # Dummy data for testing
-    def load_tracked_logs():
-        return {f"Project {i}": "test.log" for i in range(1, 50)}
-    def group_logs_by_project(data):
-        return {"_root": {k: {"alias": k, "path": v} for k, v in data.items()}}
 
 app = FastAPI()
 
 # Mount static files (JS, CSS, Images)
 app.mount("/static", StaticFiles(directory=get_resource_path("static")), name="static")
 templates = Jinja2Templates(directory=get_resource_path("templates"))
+
+# One cached LogFile per path, shared across requests.
+_log_files: dict[str, LogFile] = {}
+_log_files_lock = threading.Lock()
+
+# One polling tailer per file, fanning new lines out to every watcher.
+hub = TailHub()
+
+
+def get_log_file(filepath: str) -> LogFile:
+    with _log_files_lock:
+        lf = _log_files.get(filepath)
+        if lf is None:
+            lf = LogFile(filepath)
+            _log_files[filepath] = lf
+        return lf
+
 
 @app.get("/", response_class=HTMLResponse)
 async def get_home(request: Request):
@@ -138,6 +85,7 @@ async def get_log_page(request: Request, alias: str):
         "version": EZLOG_VERSION
     })
 
+
 @app.get("/api/logs/{alias}/history")
 async def get_log_history(
     alias: str,
@@ -148,43 +96,40 @@ async def get_log_history(
 ):
     """Fetch historical log lines for pagination"""
     logs = load_tracked_logs()
-    
+
     if alias not in logs:
         return {"error": "Log alias not found", "lines": []}
-    
+
     filepath = logs[alias]
-    
+
     if not os.path.exists(filepath):
         return {"error": "Log file not found", "lines": []}
-    
-    metadata = get_file_metadata(filepath)
-    total_lines = metadata["lines"]
-    
+
+    lf = get_log_file(filepath)
+    count = max(1, min(count, 5000))
+    total_lines = await asyncio.to_thread(lambda: lf.metadata()["lines"])
+
     if direction == "top":
-        # Fetch first N lines
-        lines = get_lines_range(filepath, 1, count)
+        lines = await asyncio.to_thread(lf.read_range, 1, count)
         start_line = 1
-        end_line = min(count, total_lines)
+        end_line = len(lines)
         has_more = end_line < total_lines
     elif direction == "around":
         if around_line <= 0:
             return {"error": "around_line is required", "lines": []}
-
         half = max(1, count // 2)
         start_line = max(1, around_line - half)
-        lines = get_lines_range(filepath, start_line, count)
+        lines = await asyncio.to_thread(lf.read_range, start_line, count)
         end_line = min(total_lines, start_line + len(lines) - 1)
         has_more = start_line > 1 or end_line < total_lines
     else:  # direction == "up"
-        # Fetch lines before the given line
         if before_line <= 1:
             return {"lines": [], "start_line": 0, "end_line": 0, "has_more": False, "total_lines": total_lines}
-        
         start_line = max(1, before_line - count)
-        lines = get_lines_range(filepath, start_line, before_line - start_line)
+        lines = await asyncio.to_thread(lf.read_range, start_line, before_line - start_line)
         end_line = before_line - 1
         has_more = start_line > 1
-    
+
     return {
         "lines": lines,
         "start_line": start_line,
@@ -212,7 +157,8 @@ async def search_log(alias: str, q: str, limit: int = 200):
         return {"error": "Search query cannot be empty", "matches": []}
 
     limit = max(1, min(limit, 1000))
-    matches = search_file_lines(filepath, q, limit=limit)
+    lf = get_log_file(filepath)
+    matches = await asyncio.to_thread(lf.search, q, limit)
 
     return {
         "query": q,
@@ -239,77 +185,65 @@ async def download_log(alias: str):
     filename = Path(filepath).name or f"{alias}.log"
     return FileResponse(filepath, filename=filename, media_type="text/plain")
 
+
 @app.websocket("/ws/{alias}")
 async def websocket_endpoint(ws: WebSocket, alias: str):
     await ws.accept()
     logs = load_tracked_logs()
-    
+
     if alias not in logs:
         await ws.send_text(json.dumps({"type": "sys", "msg": f"Error: {alias} not found"}))
         await ws.close()
         return
 
     filepath = logs[alias]
-    
-    # Generate dummy file if missing (for testing)
-    if not os.path.exists(filepath):
-        with open(filepath, "w") as f: f.write("[System] Log file created.\n")
+    lf = get_log_file(filepath)
 
     try:
-        # Get file metadata
-        metadata = get_file_metadata(filepath)
+        # File metadata (cached; only scans new bytes)
+        meta = await asyncio.to_thread(lf.metadata)
         await ws.send_text(json.dumps({
             "type": "metadata",
-            "size": metadata["size"],
-            "lines": metadata["lines"],
-            "size_human": metadata["size_human"]
+            "size": meta["size"],
+            "lines": meta["lines"],
+            "size_human": meta["size_human"],
+            "missing": meta["missing"],
+            "last_modified": meta["last_modified"]
         }))
-        
-        # Get last 500 lines efficiently
-        history_lines = tail_file_lines(filepath, n=500)
-        history_lines = [line.rstrip() for line in history_lines]
-        
-        # Send history in chunks
-        chunk_size = 200
-        for i in range(0, len(history_lines), chunk_size):
-            chunk = history_lines[i:i + chunk_size]
-            await ws.send_text(json.dumps({"type": "log_batch", "data": chunk}))
-            await asyncio.sleep(0)  # Yield control
-        
-        # Open file for live tailing
-        with open(filepath, "r", errors='replace') as f:
-            # Seek to end for live tailing
-            f.seek(0, 2)
 
-            # Marker
+        # Last 500 lines, in chunks (kept identical to the old contract)
+        if not meta["missing"]:
+            history = await asyncio.to_thread(lf.tail_lines, 500)
+            history = [line.rstrip("\r\n") for line in history]
+            for i in range(0, len(history), 200):
+                await ws.send_text(json.dumps({"type": "log_batch", "data": history[i:i + 200]}))
+                await asyncio.sleep(0)
+
+        # Live tail: subscribe before announcing LIVE_START so that any line
+        # written right after the client sees the marker is not missed.
+        task, queue = hub.subscribe(filepath)
+        try:
             await ws.send_text(json.dumps({"type": "sys", "msg": "__LIVE_START__"}))
-
-            # Live Tailing with Batching
-            live_buffer = []
-            batch_interval = 0.3  # 300ms batching for better performance
-            last_send = asyncio.get_event_loop().time()
-            
             while True:
-                line = f.readline()
-                if line:
-                    live_buffer.append(line.rstrip())
-                    
-                    # Send batch if buffer is large or time elapsed
-                    current_time = asyncio.get_event_loop().time()
-                    if len(live_buffer) >= 50 or (current_time - last_send) >= batch_interval:
-                        await ws.send_text(json.dumps({"type": "log_batch", "data": live_buffer}))
-                        live_buffer = []
-                        last_send = current_time
-                else:
-                    # No new lines - send any pending buffer and wait
-                    if live_buffer:
-                        await ws.send_text(json.dumps({"type": "log_batch", "data": live_buffer}))
-                        live_buffer = []
-                        last_send = asyncio.get_event_loop().time()
-                    await asyncio.sleep(0.1)
+                try:
+                    msg = await asyncio.wait_for(queue.get(), timeout=15)
+                except asyncio.TimeoutError:
+                    # Idle keepalive; also lets us notice a dropped client.
+                    await ws.send_text(json.dumps({"type": "ping"}))
+                    continue
+                await ws.send_text(json.dumps(msg))
+        finally:
+            hub.unsubscribe(filepath, task, queue)
 
     except WebSocketDisconnect:
         print(f"Client disconnected: {alias}")
+    except Exception as e:
+        print(f"WebSocket error ({alias}): {e}")
+        try:
+            await ws.close()
+        except Exception:
+            pass
+
 
 def start(port: int = 9200, host: str = "0.0.0.0"):
     import uvicorn
