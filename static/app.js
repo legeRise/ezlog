@@ -51,6 +51,35 @@ function markMatches(el, text, query) {
     el.replaceChildren(frag);
 }
 
+// Colour only the level token (e.g. "[WARN ]"), leaving the message in the
+// default foreground so mixed-level logs stay readable. When a search query is
+// active, highlight that instead.
+function appendLevelText(el, text, query) {
+    if (query) { markMatches(el, text, query); return; }
+
+    const m = LEVEL_RE.exec(text);
+    if (!m) { el.textContent = text; return; }
+
+    let start = m.index;
+    let end = m.index + m[0].length;
+    // Absorb a surrounding "[ ... ]" if the token sits inside brackets.
+    if (start > 0 && text[start - 1] === '[') {
+        let j = end;
+        while (j < text.length && text[j] === ' ') j++;
+        if (text[j] === ']') { start -= 1; end = j + 1; }
+    }
+
+    const cls = levelClass(detectLevel(text)) || 'text-gray-400';
+    const frag = document.createDocumentFragment();
+    if (start > 0) frag.appendChild(document.createTextNode(text.slice(0, start)));
+    const tok = document.createElement('span');
+    tok.className = `${cls} font-semibold`;
+    tok.textContent = text.slice(start, end);
+    frag.appendChild(tok);
+    if (end < text.length) frag.appendChild(document.createTextNode(text.slice(end)));
+    el.replaceChildren(frag);
+}
+
 class LogViewer {
     constructor(aliases, groups) {
         this.aliases = aliases;
@@ -699,9 +728,7 @@ class LogViewer {
         }
 
         const t = document.createElement('span');
-        t.className = levelClass(row.lvl);
-        if (this.highlightQuery) markMatches(t, row.text, this.highlightQuery);
-        else t.textContent = row.text;
+        appendLevelText(t, row.text, this.highlightQuery);
         d.appendChild(t);
 
         // Row state: search target, active anchor, selection range.
