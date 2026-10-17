@@ -36,6 +36,31 @@ def test_history_up(client):
     assert data["end_line"] == 2
 
 
+def test_history_down(client):
+    # Forward pagination — the counterpart to `up`, and the only way back down
+    # after jumping to the top of a file.
+    data = client.get(
+        "/api/logs/app/history", params={"direction": "down", "after_line": 1, "count": 2}
+    ).json()
+    assert data["lines"] == [
+        "2026-01-01 10:00:01 WARN  slow query",
+        "2026-01-01 10:00:02 ERROR boom",
+    ]
+    assert data["start_line"] == 2
+    assert data["end_line"] == 3
+    assert data["has_more"] is False
+    assert data["total_lines"] == 3
+
+
+def test_history_down_at_end_is_empty(client):
+    data = client.get(
+        "/api/logs/app/history", params={"direction": "down", "after_line": 3, "count": 2}
+    ).json()
+    assert data["lines"] == []
+    assert data["has_more"] is False
+    assert data["total_lines"] == 3
+
+
 def test_search_fields(client):
     data = client.get("/api/logs/app/search", params={"q": "error"}).json()
     assert data["count"] == 1

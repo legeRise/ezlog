@@ -128,21 +128,20 @@ class LogViewer {
         this.selEnd = 0;
         this.matchIndex = -1;     // index into this.view of the current match
 
-        // Phase 4: tabs, health, notifications, insights
+        // Phase 4: tabs, health, notifications, shortcuts panel
         this.tabs = [];                       // open aliases
         this.sidebarItems = {};               // alias -> { dot, badge }
         this.lastStatus = {};                 // alias -> status record
         this.baseline = {};                   // alias -> { errors, warnings } seen
-        this.levelCounts = { ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0, OTHER: 0 };
-        this.recentErrors = [];               // last few ERROR rows
         this.notifyEnabled = false;
-        this.insightsOpen = false;
-        this._insightsSig = '';
+        this.panelOpen = false;               // shortcuts panel — hidden by default
         this._notifyAt = 0;
         this.statusTimer = null;
 
         // Loading guards
         this.loadingOlder = false;
+        this.loadingNewer = false;      // fetching the next chunk down
+        this.loadedToEnd = false;       // window has reached the live end of the file
 
         // Render bookkeeping
         this._rafRender = null;
@@ -179,7 +178,7 @@ class LogViewer {
             selDownload: document.getElementById('selDownload'),
             selClear: document.getElementById('selClear'),
             tabBar: document.getElementById('tabBar'),
-            insights: document.getElementById('insights'),
+            helpPanel: document.getElementById('helpPanel'),
             panelBtn: document.getElementById('panelBtn'),
             notifyBtn: document.getElementById('notifyBtn'),
         };
@@ -239,7 +238,7 @@ class LogViewer {
         this.dom.selDownload.addEventListener('click', () => this.downloadCurrentLog());
         this.dom.selClear.addEventListener('click', () => this.clearSelection());
 
-        this.dom.panelBtn.addEventListener('click', () => this.toggleInsights());
+        this.dom.panelBtn.addEventListener('click', () => this.togglePanel());
         this.dom.notifyBtn.addEventListener('click', () => this.toggleNotify());
 
         // Overflow menu — keeps the rarely used, stateful controls out of the bar.
@@ -271,7 +270,7 @@ class LogViewer {
 
         this.updateToggleButtons();
         this.applyNotifyButton();
-        this.applyInsights();
+        this.applyPanel();
         this.renderTabs();
         this.startStatusPolling();
         this.setConn('idle', '');
@@ -446,12 +445,11 @@ class LogViewer {
         this.pendingRows = [];
         this.newWhileAway = 0;
         this.highlightLine = 0;
-        this.levelCounts = { ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0, OTHER: 0 };
-        this.recentErrors = [];
-        this._insightsSig = '';
         this.searchResults = [];
         this.following = true;
         this.loadingOlder = false;
+        this.loadingNewer = false;
+        this.loadedToEnd = false;
         this.highlightQuery = '';
         this.activeLine = 0;
         this.selStart = 0;
@@ -470,7 +468,6 @@ class LogViewer {
         this.render();
         this.renderSidebar(document.getElementById('projectSearch').value);
         this.renderTabs();
-        this.renderInsights();
         this.showLoading(true);
     }
 
@@ -604,7 +601,6 @@ class LogViewer {
             for (const r of rows) if (this.matches(r)) this.view.push(r);
         }
 
-        this.bumpCounts(rows);
         if (live) this.maybeNotify(rows);
 
         if (live) {
@@ -617,7 +613,6 @@ class LogViewer {
                 this.scheduleRender();
             }
         }
-        this.renderInsights();
     }
 
     prependRows(rows) {
@@ -631,8 +626,6 @@ class LogViewer {
             const matched = rows.filter((r) => this.matches(r));
             if (matched.length) this.view.unshift(...matched);
         }
-        this.bumpCounts(rows);
-        this.renderInsights();
     }
 
     // -- filtering ------------------------------------------------------
@@ -746,11 +739,11 @@ class LogViewer {
         d.appendChild(t);
 
         // Row state: search target, active anchor, selection range.
-        if (this.highlightLine && row.n === this.highlightLine) d.classList.add('bg-blue-900/40');
+        if (this.highlightLine && row.n === this.highlightLine) d.classList.add('row-hit');
         if (this.selEnd > this.selStart && row.n >= this.selStart && row.n <= this.selEnd) {
-            d.classList.add('bg-blue-900/30');
+            d.classList.add('row-sel');
         }
-        if (row.n === this.activeLine) d.classList.add('bg-blue-900/50');
+        if (row.n === this.activeLine) d.classList.add('row-active');
 
         if (row.isSearch) {
             d.classList.add('cursor-pointer');
@@ -767,7 +760,10 @@ class LogViewer {
     onScroll() {
         const el = this.dom.scroll;
         const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-        this.following = distanceToBottom < 40;
+        // "Following" only means anything while live. In history mode we must NOT
+        // pin to the bottom, or every appended chunk would drag you further down
+        // and chain-load the whole file.
+        this.following = distanceToBottom < 40 && this.mode === 'live';
 
         if (this.following) {
             this.newWhileAway = 0;
@@ -776,6 +772,12 @@ class LogViewer {
 
         if (el.scrollTop < 400 && !this.loadingOlder && this.startLine > 1 && this.mode !== 'search') {
             this.loadOlder();
+        }
+
+        // Reached the end of what's loaded while browsing history: pull the next chunk.
+        if (this.mode === 'history' && !this.loadedToEnd && !this.loadingNewer
+            && distanceToBottom < 400 && this.totalLines && this.lastLoadedLine() < this.totalLines) {
+            this.loadNewer();
         }
 
         this.scheduleRender();
@@ -843,6 +845,46 @@ class LogViewer {
     }
 
     // -- navigation -----------------------------------------------------
+    lastLoadedLine() {
+        return this.lines.length ? this.lines[this.lines.length - 1].n : 0;
+    }
+
+    // Extend the window forwards. The counterpart to loadOlder(), and the piece
+    // that was missing: without it, jumping to the top of a huge file left
+    // everything after line 500 unreachable.
+    async loadNewer() {
+        const alias = this.currentAlias;
+        if (!alias || this.loadingNewer || this.mode === 'live' || this.mode === 'search') return;
+
+        const last = this.lastLoadedLine();
+        if (!last) return;
+        if (this.totalLines && last >= this.totalLines) { this.loadedToEnd = true; return; }
+
+        this.loadingNewer = true;
+        try {
+            const res = await fetch(`/api/logs/${encodeURIComponent(alias)}/history?direction=down&after_line=${last}&count=500`);
+            const data = await res.json();
+            if (data.total_lines) this.totalLines = data.total_lines;
+
+            if (data.error || !data.lines || data.lines.length === 0) {
+                this.loadedToEnd = true;
+                this.updateFileInfo();
+                return;
+            }
+
+            const rows = data.lines.map((text, i) => ({
+                n: data.start_line + i, text, lvl: detectLevel(text),
+            }));
+            this.appendRows(rows, { live: false });
+            this.scheduleRender();
+            this.updateFileInfo();
+        } catch (e) {
+            /* transient — the next scroll will retry */
+        } finally {
+            this.loadingNewer = false;
+        }
+    }
+
     async goToTop() {
         if (!this.currentAlias) return;
         this.wantLive = false;
@@ -858,6 +900,8 @@ class LogViewer {
             const rows = data.lines.map((text, i) => ({ n: (data.start_line || 1) + i, text, lvl: detectLevel(text) }));
             this.lines = rows;
             this.startLine = data.start_line || 1;
+            if (data.total_lines) this.totalLines = data.total_lines;
+            this.loadedToEnd = false;
             this.mode = 'history';
             this.highlightLine = 0;
             this.highlightQuery = '';
@@ -938,6 +982,8 @@ class LogViewer {
             this.mode = 'history';
             this.lines = data.lines.map((text, i) => ({ n: data.start_line + i, text, lvl: detectLevel(text) }));
             this.startLine = data.start_line;
+            if (data.total_lines) this.totalLines = data.total_lines;
+            this.loadedToEnd = false;
             this.highlightLine = lineNumber;
             this.highlightQuery = this.lastSearchQuery;
             this.activeLine = lineNumber;
@@ -973,6 +1019,12 @@ class LogViewer {
             this.activeLine = lineNumber;
             this.selStart = 0;
             this.selEnd = 0;
+        }
+        // Shift-click also makes the browser drag its own text selection across the
+        // rows, which doubles up with our highlight and looks messy. Drop the native
+        // selection so the row highlight is the single, consistent one.
+        if (e.shiftKey && window.getSelection) {
+            window.getSelection().removeAllRanges();
         }
         this.updateSelBar();
         this.scheduleRender();
@@ -1099,6 +1151,7 @@ class LogViewer {
             case 'L': this.setShowNumbers(!this.showNumbers); break;
             case 'W': this.setWrap(!this.wrap); break;
             case 'c': this.copySelection(); break;
+            case '?': this.togglePanel(); break;
             case 'j': this.dom.scroll.scrollTop += ROW_HEIGHT; break;
             case 'k': this.dom.scroll.scrollTop -= ROW_HEIGHT; break;
         }
@@ -1152,7 +1205,7 @@ class LogViewer {
         this.showNumbers = localStorage.getItem('ezlog-numbers') !== '0';
         this.wrap = localStorage.getItem('ezlog-wrap') === '1';
         this.notifyEnabled = localStorage.getItem('ezlog-notify') === '1';
-        this.insightsOpen = localStorage.getItem('ezlog-insights') === '1';
+        this.panelOpen = localStorage.getItem('ezlog-panel') === '1';
         try {
             this.tabs = JSON.parse(localStorage.getItem('ezlog-tabs') || '[]') || [];
             this.baseline = JSON.parse(localStorage.getItem('ezlog-baseline') || '{}') || {};
@@ -1175,7 +1228,13 @@ class LogViewer {
         if (!this.currentAlias) { this.dom.fileInfo.textContent = ''; return; }
         const parts = [];
         if (this.fileSizeHuman) parts.push(this.fileSizeHuman);
-        if (this.totalLines) parts.push(`${this.totalLines.toLocaleString()} lines`);
+        if (this.totalLines) {
+            if (this.mode !== 'live' && this.lines.length) {
+                parts.push(`lines ${this.startLine.toLocaleString()}–${this.lastLoadedLine().toLocaleString()} of ${this.totalLines.toLocaleString()}`);
+            } else {
+                parts.push(`${this.totalLines.toLocaleString()} lines`);
+            }
+        }
         if (this.isFiltered()) parts.push(`${this.view.length.toLocaleString()} shown`);
         this.dom.fileInfo.textContent = parts.join(' • ');
     }
@@ -1215,76 +1274,18 @@ class LogViewer {
         a.remove();
     }
 
-    // -- insights -------------------------------------------------------
-    bumpCounts(rows) {
-        for (const r of rows) {
-            this.levelCounts[r.lvl] = (this.levelCounts[r.lvl] || 0) + 1;
-            if (r.lvl === 'ERROR') {
-                this.recentErrors.push(r);
-                if (this.recentErrors.length > 50) this.recentErrors.shift();
-            }
-        }
+    // -- keyboard-shortcuts panel ---------------------------------------
+    // The panel content is static markup in the template: a reference that is
+    // always true, instead of counts guessed from the log text.
+    togglePanel() {
+        this.panelOpen = !this.panelOpen;
+        localStorage.setItem('ezlog-panel', this.panelOpen ? '1' : '0');
+        this.applyPanel();
     }
 
-    toggleInsights() {
-        this.insightsOpen = !this.insightsOpen;
-        localStorage.setItem('ezlog-insights', this.insightsOpen ? '1' : '0');
-        this.applyInsights();
-        this._insightsSig = '';
-        this.renderInsights();
-    }
-
-    applyInsights() {
-        this.dom.insights.classList.toggle('hidden', !this.insightsOpen);
-        this.dom.panelBtn.classList.toggle('is-on', this.insightsOpen);
-    }
-
-    renderInsights() {
-        if (!this.insightsOpen) return;
-        const c = this.levelCounts;
-        const total = c.ERROR + c.WARN + c.INFO + c.DEBUG + c.OTHER;
-        const sig = `${this.currentAlias}:${total}:${c.ERROR}:${c.WARN}:${c.INFO}:${c.DEBUG}:${this.recentErrors.length}`;
-        if (sig === this._insightsSig) return;
-        this._insightsSig = sig;
-
-        const pct = (n) => (total ? Math.round((n / total) * 100) : 0);
-        const bar = (label, n, cls) => `
-            <div class="mb-2">
-                <div class="flex justify-between mb-1 text-gray-400">
-                    <span>${label}</span><span class="text-gray-300">${n.toLocaleString()} · ${pct(n)}%</span>
-                </div>
-                <div class="bg-gray-700 rounded"><div class="hist-bar ${cls}" style="width:${pct(n)}%"></div></div>
-            </div>`;
-        const errs = this.recentErrors.slice(-12).reverse();
-        const errList = errs.length
-            ? errs.map((r) => `<button data-line="${r.n}" class="ins-err w-full text-left text-red-400 hover:bg-gray-700 rounded px-1 py-0.5 truncate">${this.escape(r.text)}</button>`).join('')
-            : '<p class="text-gray-500">No errors in the loaded window.</p>';
-
-        this.dom.insights.innerHTML = `
-            <div class="p-3 border-b border-gray-600 flex items-center justify-between">
-                <span class="font-semibold text-white">Insights</span>
-                <span class="text-gray-500">${total.toLocaleString()} loaded</span>
-            </div>
-            <div class="p-3 border-b border-gray-600">
-                ${bar('Errors', c.ERROR, 'bg-red-500')}
-                ${bar('Warnings', c.WARN, 'bg-yellow-500')}
-                ${bar('Info', c.INFO, 'bg-blue-500')}
-                ${bar('Debug', c.DEBUG, 'bg-gray-500')}
-            </div>
-            <div class="p-3">
-                <div class="font-semibold text-white mb-2">Recent errors</div>
-                <div class="space-y-0.5">${errList}</div>
-            </div>`;
-
-        this.dom.insights.querySelectorAll('.ins-err').forEach((b) => {
-            b.addEventListener('click', () => {
-                const n = parseInt(b.dataset.line, 10);
-                this.highlightLine = n;
-                this.activeLine = n;
-                this.scrollToLine(n);
-                this.scheduleRender();
-            });
-        });
+    applyPanel() {
+        this.dom.helpPanel.classList.toggle('hidden', !this.panelOpen);
+        this.dom.panelBtn.classList.toggle('is-on', this.panelOpen);
     }
 
     // -- desktop notifications -----------------------------------------
@@ -1412,16 +1413,12 @@ class LogViewer {
         this.currentProject = null;
         this.lines = [];
         this.view = [];
-        this.levelCounts = { ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0, OTHER: 0 };
-        this.recentErrors = [];
-        this._insightsSig = '';
         this.dom.title.textContent = 'Select a log';
         this.dom.fileInfo.textContent = '';
         this.setConn('idle', '');
         this.dom.welcome.classList.remove('hidden');
         this.dom.selBar.classList.add('hidden');
         this.render();
-        this.renderInsights();
         this.renderSidebar(document.getElementById('projectSearch').value);
         this.renderTabs();
     }

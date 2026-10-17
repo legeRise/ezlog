@@ -91,6 +91,7 @@ async def get_log_history(
     direction: str = "up",
     before_line: int = 0,
     around_line: int = 0,
+    after_line: int = 0,
     count: int = 500
 ):
     """Fetch historical log lines for pagination"""
@@ -121,6 +122,17 @@ async def get_log_history(
         lines = await asyncio.to_thread(lf.read_range, start_line, count)
         end_line = min(total_lines, start_line + len(lines) - 1)
         has_more = start_line > 1 or end_line < total_lines
+    elif direction == "down":
+        # The lines that come *after* after_line. This is what lets you scroll
+        # back down after jumping to the top of a huge file — without it, the
+        # window could only ever grow backwards.
+        if total_lines and after_line >= total_lines:
+            return {"lines": [], "start_line": after_line, "end_line": after_line,
+                    "has_more": False, "total_lines": total_lines}
+        start_line = max(1, after_line + 1)
+        lines = await asyncio.to_thread(lf.read_range, start_line, count)
+        end_line = start_line + len(lines) - 1 if lines else after_line
+        has_more = end_line < total_lines
     else:  # direction == "up"
         if before_line <= 1:
             return {"lines": [], "start_line": 0, "end_line": 0, "has_more": False, "total_lines": total_lines}

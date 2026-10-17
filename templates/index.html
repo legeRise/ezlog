@@ -22,6 +22,7 @@
             --surface-hover: #2e2e2f; --border: #3e3e42;
             --fg: #d1d5db; --fg-muted: #9ca3af; --fg-dim: #505050;
             --accent: #007acc; --accent-hover: #0062a3; --accent-soft: rgba(0,122,204,.16);
+            --row-sel: rgba(0,122,204,.30); --row-active: rgba(0,122,204,.55); --row-hit: rgba(250,204,21,.15);
             --lv-error: #f87171; --lv-warn: #facc15; --lv-info: #60a5fa;
             --shadow: 0 10px 30px rgba(0,0,0,.5);
             --scrollbar-track: #1e1e1e; --scrollbar-thumb: #424242; --scrollbar-thumb-hover: #5a5a5a;
@@ -31,6 +32,7 @@
             --surface-hover: #ebebeb; --border: #d5d5d5;
             --fg: #444444; --fg-muted: #666666; --fg-dim: #999999;
             --accent: #2563eb; --accent-hover: #1d4ed8; --accent-soft: rgba(37,99,235,.12);
+            --row-sel: rgba(37,99,235,.14); --row-active: rgba(37,99,235,.32); --row-hit: rgba(217,119,6,.15);
             --lv-error: #c53030; --lv-warn: #d97706; --lv-info: #2563eb;
             --shadow: 0 10px 30px rgba(0,0,0,.14);
             --scrollbar-track: #f5f5f5; --scrollbar-thumb: #d0d0d0; --scrollbar-thumb-hover: #b0b0b0;
@@ -40,6 +42,7 @@
             --surface-hover: #e8e1ce; --border: #d3cbb7;
             --fg: #586e75; --fg-muted: #657b83; --fg-dim: #93a1a1;
             --accent: #268bd2; --accent-hover: #1f6fa8; --accent-soft: rgba(38,139,210,.14);
+            --row-sel: rgba(38,139,210,.18); --row-active: rgba(38,139,210,.36); --row-hit: rgba(181,137,0,.20);
             --lv-error: #dc322f; --lv-warn: #b58900; --lv-info: #268bd2;
             --shadow: 0 10px 30px rgba(0,0,0,.14);
             --scrollbar-track: #fdf6e3; --scrollbar-thumb: #93a1a1; --scrollbar-thumb-hover: #657b83;
@@ -65,9 +68,29 @@
         .wrapped-row { white-space: pre-wrap; word-break: break-word; height: auto; line-height: 1.5; }
         .log-num { user-select: none; }
 
+        /* Row states — one highlight system shared by the app and the browser, so a
+           shift-click range never doubles up with the browser's own selection. */
+        .log-row.row-sel { background: var(--row-sel); }
+        .log-row.row-active { background: var(--row-active); }
+        .log-row.row-hit { background: var(--row-hit); }
+        ::selection { background: var(--row-sel); }
+
         /* ============================== icons ============================== */
         .ico { width: 16px; height: 16px; display: block; flex: none; color: inherit; }
         .ico-sm { width: 14px; height: 14px; }
+
+        /* ============================== shortcuts panel ============================== */
+        #helpPanel { background: var(--surface-2); border-color: var(--border); color: var(--fg); }
+        .keys-group + .keys-group { border-top: 1px solid var(--border); }
+        .keys-title { color: var(--fg-muted); }
+        .keys-row { display: flex; align-items: baseline; gap: 10px; padding: 3px 0; }
+        .keys-desc { color: var(--fg-muted); }
+        kbd {
+            display: inline-block; min-width: 20px; padding: 1px 6px; text-align: center;
+            font-family: inherit; font-size: 11px; line-height: 16px;
+            color: var(--fg); background: var(--surface-3);
+            border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px;
+        }
 
         /* ============================== toolbar controls ============================== */
         .icon-btn {
@@ -257,6 +280,7 @@
         <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6M6 12l6-6 6 6"/></symbol>
         <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v13M6 12l6 6 6-6"/></symbol>
         <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M7 20v-6M12 20V8M17 20v-9"/></symbol>
+        <symbol id="i-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.7.35-1 .9-1 1.7v.4"/><path d="M12 17h.01"/></symbol>
         <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8.5A6 6 0 0 0 6 8.5c0 6-2 7.5-2 7.5h16s-2-1.5-2-7.5"/><path d="M10.5 20a2 2 0 0 0 3 0"/></symbol>
         <symbol id="i-bell-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 5.6A6 6 0 0 1 18 8.5c0 2 .2 3.5.6 4.7M6 8.7c-.5 4.5-2 7.3-2 7.3h13"/><path d="M10.5 20a2 2 0 0 0 3 0M3 3l18 18"/></symbol>
         <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5.6 5.6L4.2 4.2M19.8 19.8l-1.4-1.4M18.4 5.6l1.4-1.4M4.2 19.8l1.4-1.4"/></symbol>
@@ -325,7 +349,7 @@
                 <span id="pauseIcon"><svg class="ico"><use href="#i-pause"></use></svg></span>
                 <span id="pendingCount" class="count-pill hidden">0</span>
             </button>
-            <button id="panelBtn" class="icon-btn" title="Insights panel"><svg class="ico"><use href="#i-chart"></use></svg></button>
+            <button id="panelBtn" class="icon-btn" title="Keyboard shortcuts (?)"><svg class="ico"><use href="#i-help"></use></svg></button>
 
             <span class="tb-sep desk-only"></span>
 
@@ -348,7 +372,7 @@
         <!-- OPEN TABS -->
         <div id="tabBar" class="hidden h-9 shrink-0 bg-gray-800 border-b border-gray-600 flex overflow-x-auto no-scrollbar text-xs"></div>
 
-        <!-- VIEWER + INSIGHTS -->
+        <!-- VIEWER + SHORTCUTS PANEL -->
         <div class="flex-1 flex min-h-0">
         <div id="viewer" class="flex-1 relative overflow-hidden log-font">
             <!-- Virtualized scroller -->
@@ -386,8 +410,35 @@
             </button>
         </div>
 
-        <!-- INSIGHTS PANEL -->
-        <aside id="insights" class="hidden w-72 shrink-0 bg-gray-800 border-l border-gray-600 overflow-y-auto"></aside>
+        <!-- KEYBOARD SHORTCUTS — hidden by default; open with ? or the toolbar button -->
+        <aside id="helpPanel" class="hidden w-64 shrink-0 border-l overflow-y-auto text-xs">
+            <div class="keys-group px-3 py-3">
+                <div class="keys-title uppercase tracking-wide text-[10px] mb-2">Search</div>
+                <div class="keys-row"><kbd>/</kbd><span class="keys-desc">Filter the loaded lines</span></div>
+                <div class="keys-row"><kbd>Enter</kbd><span class="keys-desc">Search the whole file</span></div>
+                <div class="keys-row"><kbd>n</kbd><span class="keys-desc">Next match · <kbd>N</kbd> previous</span></div>
+                <div class="keys-row"><kbd>Esc</kbd><span class="keys-desc">Clear the filter, back to live</span></div>
+            </div>
+            <div class="keys-group px-3 py-3">
+                <div class="keys-title uppercase tracking-wide text-[10px] mb-2">Move</div>
+                <div class="keys-row"><kbd>g</kbd><span class="keys-desc">Go to the top of the file</span></div>
+                <div class="keys-row"><kbd>G</kbd><span class="keys-desc">Go to the bottom and go live</span></div>
+                <div class="keys-row"><kbd>j</kbd><span class="keys-desc">Scroll down a line · <kbd>k</kbd> up</span></div>
+                <div class="keys-row"><kbd>p</kbd><span class="keys-desc">Pause / resume live updates</span></div>
+            </div>
+            <div class="keys-group px-3 py-3">
+                <div class="keys-title uppercase tracking-wide text-[10px] mb-2">Select &amp; copy</div>
+                <div class="keys-row"><span class="keys-desc">Click a line to mark it</span></div>
+                <div class="keys-row"><span class="keys-desc">Shift-click another line to select the range</span></div>
+                <div class="keys-row"><kbd>c</kbd><span class="keys-desc">Copy the marked line or range</span></div>
+            </div>
+            <div class="keys-group px-3 py-3">
+                <div class="keys-title uppercase tracking-wide text-[10px] mb-2">View</div>
+                <div class="keys-row"><kbd>L</kbd><span class="keys-desc">Toggle line numbers</span></div>
+                <div class="keys-row"><kbd>W</kbd><span class="keys-desc">Toggle wrapped lines</span></div>
+                <div class="keys-row"><kbd>?</kbd><span class="keys-desc">Show or hide this panel</span></div>
+            </div>
+        </aside>
         </div>
     </main>
 

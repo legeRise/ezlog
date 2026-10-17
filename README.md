@@ -13,10 +13,10 @@ A standalone, web-based log viewer with real-time streaming.
 - ⚡ Instant last 500 lines, with byte-offset history as you scroll up
 - 🧭 **Virtualized viewer** — stays smooth on 100k+ line files
 - 🔢 Line-number gutter, wrap toggle, and level-tinted rows
-- 🎚️ Level filters (ALL / ERR / WARN / INFO) plus live text filtering
+- 🎚️ Live text filtering as you type — instant, no page reload
 - 🔎 Full-file search with match highlighting and `n`/`N` navigation (press Enter in the filter box)
 - ✂️ Click a line to copy it; Shift-click to select a range and copy or download it
-- ⌨️ Keyboard-first: `/` search · `g`/`G` top/bottom · `p` pause · `n`/`N` matches · `L` line numbers · `W` wrap · `c` copy · `j`/`k` scroll
+- ⌨️ Keyboard-first: `/` search · `g`/`G` top/bottom · `p` pause · `n`/`N` matches · `L` line numbers · `W` wrap · `c` copy · `j`/`k` scroll · `?` shortcuts
 - 🎨 Multiple themes (Dark, Light, Solarized) with no theme flash
 - 📦 Offline UI — all assets are bundled locally, no CDN
 - 📱 Mobile responsive
@@ -278,6 +278,7 @@ Each selected log updates the URL to `/logs/<alias>`, so you can open different 
 | `L` | Toggle line numbers |
 | `W` | Toggle line wrapping |
 | `c` | Copy the active line or selection |
+| `?` | Show / hide the keyboard-shortcut panel |
 | Click / Shift-click | Copy one line / select a range to copy or download |
 
 ![Log Viewer](docs/images/bottom.png)
