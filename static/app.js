@@ -115,7 +115,6 @@ class LogViewer {
         this.paused = false;
         this.pendingRows = [];
         this.filterText = '';
-        this.filterLevel = 'ALL';
         this.showNumbers = true;
         this.wrap = false;
         this.following = true;
@@ -135,7 +134,6 @@ class LogViewer {
         this.lastStatus = {};                 // alias -> status record
         this.baseline = {};                   // alias -> { errors, warnings } seen
         this.levelCounts = { ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0, OTHER: 0 };
-        this.seenLevels = new Set();          // levels actually detected in this file
         this.recentErrors = [];               // last few ERROR rows
         this.notifyEnabled = false;
         this.insightsOpen = false;
@@ -172,7 +170,7 @@ class LogViewer {
             filterInput: document.getElementById('logFilter'),
             themeBtn: document.getElementById('themeBtn'),
             goTopBtn: document.getElementById('goTopBtn'),
-            levelChips: document.getElementById('levelChips'),
+            goBottomBtn: document.getElementById('goBottomBtn'),
             lineNumBtn: document.getElementById('lineNumBtn'),
             wrapBtn: document.getElementById('wrapBtn'),
             selBar: document.getElementById('selBar'),
@@ -211,15 +209,11 @@ class LogViewer {
         document.getElementById('clearBtn').addEventListener('click', () => this.clearView());
 
         this.dom.goTopBtn.addEventListener('click', () => this.goToTop());
+        this.dom.goBottomBtn.addEventListener('click', () => this.goToBottom());
         this.dom.jumpLatest.addEventListener('click', () => this.jumpToLatest());
 
         this.dom.lineNumBtn.addEventListener('click', () => this.setShowNumbers(!this.showNumbers));
         this.dom.wrapBtn.addEventListener('click', () => this.setWrap(!this.wrap));
-
-        this.dom.levelChips.addEventListener('click', (e) => {
-            const btn = e.target.closest('.lvl');
-            if (btn) this.setLevel(btn.dataset.level);
-        });
 
         this.dom.filterInput.addEventListener('input', (e) => {
             clearTimeout(this.filterDebounce);
@@ -275,8 +269,6 @@ class LogViewer {
             if (alias && this.aliases[alias]) this.connect(alias, { updateRoute: false });
         });
 
-        this.updateLevelChips();
-        this.renderLevelChips();
         this.updateToggleButtons();
         this.applyNotifyButton();
         this.applyInsights();
@@ -455,8 +447,6 @@ class LogViewer {
         this.newWhileAway = 0;
         this.highlightLine = 0;
         this.levelCounts = { ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0, OTHER: 0 };
-        this.seenLevels = new Set();
-        this.dom.levelChips.style.display = 'none';
         this.recentErrors = [];
         this._insightsSig = '';
         this.searchResults = [];
@@ -590,7 +580,6 @@ class LogViewer {
         this.following = true;
         this.newWhileAway = 0;
         this.updateFileInfo();
-        this.updateNavButtons();
         this.showLoading(false);
         this.render();
         this.scrollToBottom();
@@ -628,7 +617,6 @@ class LogViewer {
                 this.scheduleRender();
             }
         }
-        this.updateNavButtons();
         this.renderInsights();
     }
 
@@ -649,13 +637,11 @@ class LogViewer {
 
     // -- filtering ------------------------------------------------------
     isFiltered() {
-        return this.filterLevel !== 'ALL' || !!this.filterText;
+        return !!this.filterText;
     }
 
     matches(row) {
-        if (this.filterLevel !== 'ALL' && row.lvl !== this.filterLevel) return false;
-        if (this.filterText && !row.text.toLowerCase().includes(this.filterText)) return false;
-        return true;
+        return !this.filterText || row.text.toLowerCase().includes(this.filterText);
     }
 
     rebuildView() {
@@ -667,21 +653,6 @@ class LogViewer {
         this.rebuildView();
         this.updateFileInfo();
         this.scheduleRender();
-    }
-
-    setLevel(level) {
-        if (this.filterLevel === level) level = 'ALL';
-        this.filterLevel = level;
-        this.updateLevelChips();
-        this.rebuildView();
-        this.updateFileInfo();
-        this.scheduleRender();
-    }
-
-    updateLevelChips() {
-        this.dom.levelChips.querySelectorAll('.lvl').forEach((btn) => {
-            btn.classList.toggle('is-on', btn.dataset.level === this.filterLevel);
-        });
     }
 
     // -- rendering (virtualized) ---------------------------------------
@@ -710,8 +681,18 @@ class LogViewer {
             return;
         }
 
-        const st = this.dom.scroll.scrollTop;
-        const h = this.dom.scroll.clientHeight || 400;
+        // Follow: keep the newest line in view as batches stream in. The sizer
+        // height changed just above, so snap to the new bottom *before* picking
+        // the row window — otherwise we render the previous window and the new
+        // lines sit below the fold until the user scrolls.
+        const el = this.dom.scroll;
+        if (this.following) {
+            const maxTop = el.scrollHeight - el.clientHeight;
+            if (el.scrollTop < maxTop) el.scrollTop = maxTop;
+        }
+
+        const st = el.scrollTop;
+        const h = el.clientHeight || 400;
         const first = Math.max(0, Math.floor(st / ROW_HEIGHT) - 8);
         const last = Math.min(this.view.length - 1, Math.ceil((st + h) / ROW_HEIGHT) + 8);
 
@@ -733,6 +714,12 @@ class LogViewer {
         for (const row of slice) frag.appendChild(this.makeRow(row));
         rows.replaceChildren(frag);
         this.dom.sizer.style.height = 'auto';
+        // Wrap mode renders a fixed prefix, so only follow when nothing is
+        // truncated — otherwise "bottom" would mean line WRAP_RENDER_CAP.
+        if (this.following && this.view.length <= WRAP_RENDER_CAP) {
+            const el = this.dom.scroll;
+            el.scrollTop = el.scrollHeight;
+        }
         if (this.view.length > WRAP_RENDER_CAP) {
             this.toast(`Wrap mode limited to ${WRAP_RENDER_CAP} lines — disable to scroll the full window`);
         }
@@ -791,7 +778,6 @@ class LogViewer {
             this.loadOlder();
         }
 
-        this.updateNavButtons();
         this.scheduleRender();
     }
 
@@ -848,7 +834,6 @@ class LogViewer {
                 el.scrollTop = oldTop + (newHeight - oldHeight);
             });
             this.updateFileInfo();
-            this.updateNavButtons();
         } catch (e) {
             /* transient */
         } finally {
@@ -882,7 +867,6 @@ class LogViewer {
             this.render();
             this.dom.scroll.scrollTop = 0;
             this.updateFileInfo();
-            this.updateNavButtons();
         } catch (e) {
             this.toast('Unable to load top');
         } finally {
@@ -936,7 +920,6 @@ class LogViewer {
             }
             this.dom.scroll.scrollTop = 0;
             this.updateFileInfo();
-            this.updateNavButtons();
         } catch (e) {
             this.toast('Search failed');
         } finally {
@@ -964,7 +947,6 @@ class LogViewer {
             this.render();
             this.scrollToLine(lineNumber);
             this.updateFileInfo();
-            this.updateNavButtons();
             this.toast(`Context around line ${lineNumber}`);
         } catch (e) {
             this.toast('Unable to load context');
@@ -1198,10 +1180,6 @@ class LogViewer {
         this.dom.fileInfo.textContent = parts.join(' • ');
     }
 
-    updateNavButtons() {
-        this.dom.goTopBtn.classList.toggle('parked', this.startLine <= 1 || this.mode === 'search');
-    }
-
     showLoading(show) {
         this.dom.loading.classList.toggle('hidden', !show);
     }
@@ -1239,65 +1217,13 @@ class LogViewer {
 
     // -- insights -------------------------------------------------------
     bumpCounts(rows) {
-        let sawNewLevel = false;
         for (const r of rows) {
             this.levelCounts[r.lvl] = (this.levelCounts[r.lvl] || 0) + 1;
-            if (r.lvl !== 'OTHER' && !this.seenLevels.has(r.lvl)) {
-                this.seenLevels.add(r.lvl);
-                sawNewLevel = true;
-            }
             if (r.lvl === 'ERROR') {
                 this.recentErrors.push(r);
                 if (this.recentErrors.length > 50) this.recentErrors.shift();
             }
         }
-        if (sawNewLevel) this.renderLevelChips();
-    }
-
-    // EZLog does not parse the log format — it guesses a level from the text.
-    // So the level filter only offers levels this file has actually shown, and
-    // disappears entirely when the guess finds nothing (or a single level).
-    renderLevelChips() {
-        const defs = [
-            ['ERROR', 'Err', 'lvl-error'],
-            ['WARN', 'Warn', 'lvl-warn'],
-            ['INFO', 'Info', 'lvl-info'],
-            ['DEBUG', 'Debug', 'lvl-debug'],
-        ];
-        const seg = this.dom.levelChips;
-        const present = defs.filter(([lv]) => this.seenLevels.has(lv));
-
-        // Drop a filter that no longer applies to this file's levels.
-        if (this.filterLevel !== 'ALL' && !this.seenLevels.has(this.filterLevel)) {
-            this.filterLevel = 'ALL';
-            this.rebuildView();
-            this.updateFileInfo();
-            this.scheduleRender();
-        }
-
-        if (present.length < 2) {
-            seg.style.display = 'none';
-            if (this.filterLevel !== 'ALL') {
-                this.filterLevel = 'ALL';
-                this.rebuildView();
-                this.updateFileInfo();
-                this.scheduleRender();
-            }
-            return;
-        }
-
-        seg.style.display = '';   // honoured by the responsive `hidden sm:flex`
-        seg.replaceChildren();
-        const mk = (label, level, mod) => {
-            const b = document.createElement('button');
-            b.className = 'lvl' + (mod ? ' ' + mod : '');
-            b.dataset.level = level;
-            b.textContent = label;
-            return b;
-        };
-        seg.appendChild(mk('All', 'ALL', ''));
-        for (const [lv, label, mod] of present) seg.appendChild(mk(label, lv, mod));
-        this.updateLevelChips();
     }
 
     toggleInsights() {
