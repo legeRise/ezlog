@@ -145,7 +145,7 @@ Use HTTPS at the proxy when exposing EZLog beyond a trusted local network.
 2. **(Optional)** Bump the version. There is a single source of truth in `version.py`:
    ```python
    # version.py
-   __version__ = "2.0.0"
+   __version__ = "2.0.1"
    ```
 
 3. Build the standalone binary:
